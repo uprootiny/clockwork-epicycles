@@ -8,7 +8,6 @@ on:
 
 env:
   GODOT_VERSION: 4.2.2
-  GODOT_DOWNLOAD_BASE: https://downloads.tuxfamily.org/godotengine/4.2.2
 
 jobs:
   test-linux:
@@ -21,7 +20,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -L --fail -o godot.zip "${GODOT_DOWNLOAD_BASE}/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          curl -L --fail --retry 3 -o godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
           unzip -q godot.zip
           chmod +x Godot_v${GODOT_VERSION}-stable_linux.x86_64
           sudo mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
@@ -44,13 +44,6 @@ jobs:
           set -euo pipefail
           godot --headless --path . --script res://scripts/tests/test_suite.gd
 
-      - name: Run containerized test
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker build -t clockwork-rube-test .
-          docker run --rm clockwork-rube-test
-
   build-macos:
     needs: test-linux
     runs-on: macos-latest
@@ -63,7 +56,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -L --fail -o godot.zip "${GODOT_DOWNLOAD_BASE}/Godot_v${GODOT_VERSION}-stable_macos.universal.zip"
+          curl -L --fail --retry 3 -o godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_macos.universal.zip"
           unzip -q godot.zip
           mv Godot.app godot
 
@@ -71,7 +65,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -L --fail -o templates.tpz "${GODOT_DOWNLOAD_BASE}/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          curl -L --fail --retry 3 -o templates.tpz \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
           mkdir -p "$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
           unzip -q -o templates.tpz -d "$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
           test -d "$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
