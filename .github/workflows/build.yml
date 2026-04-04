@@ -90,12 +90,12 @@ jobs:
       - name: Run physics test
         timeout-minutes: 3
         run: |
-          timeout 120 godot/Godot.app/Contents/MacOS/Godot --headless --path . --script res://scripts/physics_test_runner.gd
+          godot/Godot.app/Contents/MacOS/Godot --headless --path . --script res://scripts/physics_test_runner.gd
 
       - name: Run invariant test suite
         timeout-minutes: 3
         run: |
-          timeout 120 godot/Godot.app/Contents/MacOS/Godot --headless --path . --script res://scripts/tests/test_suite.gd
+          godot/Godot.app/Contents/MacOS/Godot --headless --path . --script res://scripts/tests/test_suite.gd
 
       - name: Export macOS app
         run: |
