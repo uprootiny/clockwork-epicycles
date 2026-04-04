@@ -28,6 +28,9 @@ func solve(rotors: Dictionary, _dt: float) -> void:
 		last_impulse = 0.0
 		return
 	var c_dot := rw.omega + coupling_ratio * rb.omega
+	if is_nan(c_dot) or is_inf(c_dot):
+		last_impulse = 0.0
+		return
 	var denom := 1.0 / rw.inertia + (coupling_ratio * coupling_ratio) / rb.inertia
 	if denom <= EPSILON:
 		last_impulse = 0.0
@@ -47,4 +50,7 @@ func measure_error(rotors: Dictionary) -> float:
 	var rw: Rotor = rotors[wheel]
 	var rb: Rotor = rotors[balance]
 	var gate := clampf(1.0 - abs(rb.theta) / engage_angle, 0.0, 1.0)
-	return gate * abs(rw.omega + coupling_ratio * rb.omega)
+	var err := gate * abs(rw.omega + coupling_ratio * rb.omega)
+	if is_nan(err):
+		return 0.0
+	return err

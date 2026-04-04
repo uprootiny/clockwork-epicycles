@@ -29,6 +29,8 @@ func solve(rotors: Dictionary, _dt: float) -> void:
 		ic = rc.inertia
 		jc = -(ra.radius + sign_b * rb.radius)
 	var c_dot := ra.radius * (ra.omega - omega_c) + sign_b * rb.radius * (rb.omega - omega_c)
+	if is_nan(c_dot) or is_inf(c_dot):
+		return
 	var denom := (ra.radius * ra.radius) / ra.inertia + (rb.radius * rb.radius) / rb.inertia
 	if carrier != "":
 		denom += (jc * jc) / ic
@@ -48,4 +50,7 @@ func measure_error(rotors: Dictionary) -> float:
 	var sign_b := -1.0 if internal_mesh else 1.0
 	if carrier != "":
 		omega_c = (rotors[carrier] as Rotor).omega
-	return abs(ra.radius * (ra.omega - omega_c) + sign_b * rb.radius * (rb.omega - omega_c))
+	var err := abs(ra.radius * (ra.omega - omega_c) + sign_b * rb.radius * (rb.omega - omega_c))
+	if is_nan(err):
+		return 0.0
+	return err

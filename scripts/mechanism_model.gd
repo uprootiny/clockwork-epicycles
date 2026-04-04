@@ -153,13 +153,15 @@ func reset() -> void:
 func step(delta: float) -> void:
 	if paused:
 		return
+	# Clamp delta to prevent blowup from tab-switch / window-unfocus spikes
+	var clamped_delta := clampf(delta, 0.0, 0.1)
 	var substeps := max(microsteps, 1)
-	var h := delta / float(substeps)
+	var h := clamped_delta / float(substeps)
 	for _i in range(substeps):
 		_step_simulation(h)
 	_update_positions()
 	_update_metrics()
-	_update_activity(delta)
+	_update_activity(clamped_delta)
 
 func _step_simulation(h: float) -> void:
 	sim_time += h
@@ -252,9 +254,12 @@ func _apply_hammer_and_bell(h: float) -> void:
 	var bell_restoring := -7.4 * bell_angle - 0.85 * bell_omega
 	bell_omega += bell_restoring * h
 	bell_angle += bell_omega * h
+	bell_angle = clampf(bell_angle, -1.5, 1.5)
+	bell_omega = clampf(bell_omega, -20.0, 20.0)
 	if hammer_angle > 0.86 and hammer_omega > 0.0:
 		var strike := min(hammer_omega * 0.18, 2.4)
 		bell_omega += strike
+		bell_omega = clampf(bell_omega, -20.0, 20.0)
 		hammer_omega *= -0.22
 		hammer_angle = 0.82
 		last_hammer_impulse = strike
@@ -315,6 +320,15 @@ func _update_activity(delta: float) -> void:
 func _update_metrics() -> void:
 	total_constraint_error = get_constraint_error()
 	total_energy_value = total_energy()
+	# Cap accumulators to prevent float precision degradation over long runs
+	var accum_cap := 1e6
+	belt_energy_accum = minf(belt_energy_accum, accum_cap)
+	cam_energy_accum = minf(cam_energy_accum, accum_cap)
+	strike_energy_accum = minf(strike_energy_accum, accum_cap)
+	ratchet_energy_accum = minf(ratchet_energy_accum, accum_cap)
+	geneva_energy_accum = minf(geneva_energy_accum, accum_cap)
+	bell_energy_accum = minf(bell_energy_accum, accum_cap)
+	momentum_score = minf(momentum_score, accum_cap)
 	output_power_estimate = abs((rotors["geneva"] as Rotor).omega * 0.18) + abs(bell_omega * 0.12) + abs((rotors["flywheel"] as Rotor).omega * 0.08)
 	var sun_omega := abs((rotors["sun"] as Rotor).omega)
 	var geneva_omega := abs((rotors["geneva"] as Rotor).omega)

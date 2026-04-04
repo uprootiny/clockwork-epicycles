@@ -1,6 +1,5 @@
-/*! coi-serviceworker v0.1.7 - Guido Zuidhof, licensed under MIT */
-// Minimal service worker that enables SharedArrayBuffer on GitHub Pages
-// by adding Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy headers.
+/*! coi-serviceworker — enables SharedArrayBuffer on GitHub Pages */
+// Adds COOP/COEP headers via service worker for cross-origin isolation.
 
 if (typeof window === 'undefined') {
   // Service worker context
@@ -15,17 +14,32 @@ if (typeof window === 'undefined') {
         headers.set("Cross-Origin-Embedder-Policy", "credentialless");
         headers.set("Cross-Origin-Opener-Policy", "same-origin");
         return new Response(r.body, { status: r.status, statusText: r.statusText, headers });
-      }).catch((err) => console.error(err))
+      }).catch((err) => {
+        console.error("coi-sw fetch error:", err);
+        return new Response("Service Worker fetch failed", { status: 500 });
+      })
     );
   });
 } else {
   // Window context — register the service worker
-  if (window.crossOriginIsolated === false) {
-    const r = window.navigator.serviceWorker.register(window.document.currentScript.src, { scope: "/" });
-    r.then((reg) => {
+  (async function() {
+    if (window.crossOriginIsolated) return;
+    // Derive scope from current page location (works for GitHub Pages subpaths)
+    const scriptUrl = document.currentScript && document.currentScript.src;
+    if (!scriptUrl) return;
+    const scopeUrl = new URL(".", scriptUrl).href;
+    try {
+      const reg = await navigator.serviceWorker.register(scriptUrl, { scope: scopeUrl });
       if (reg.active && !navigator.serviceWorker.controller) {
         window.location.reload();
+      } else if (reg.installing || reg.waiting) {
+        const sw = reg.installing || reg.waiting;
+        sw.addEventListener("statechange", () => {
+          if (sw.state === "activated") window.location.reload();
+        });
       }
-    });
-  }
+    } catch (e) {
+      console.error("coi-sw registration failed:", e);
+    }
+  })();
 }

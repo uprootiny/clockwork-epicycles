@@ -35,7 +35,12 @@ func apply_torque(dt: float) -> void:
 	omega += dt * torque / inertia
 
 func apply_damping(dt: float) -> void:
-	omega *= max(0.0, 1.0 - damping * dt)
+	# Use exponential decay for stability at large dt
+	# exp(-damping*dt) ≈ 1-damping*dt for small dt, but never overshoots
+	if damping * dt > 0.5:
+		omega *= exp(-damping * dt)
+	else:
+		omega *= max(0.0, 1.0 - damping * dt)
 
 func integrate(dt: float, wrap_span: float) -> void:
 	theta = wrapf(theta + omega * dt, -wrap_span, wrap_span)
@@ -51,6 +56,9 @@ func sanitize(max_allowed_omega: float) -> bool:
 		ok = false
 	if is_nan(omega) or is_inf(omega):
 		omega = 0.0
+		ok = false
+	if is_nan(torque) or is_inf(torque):
+		torque = 0.0
 		ok = false
 	omega = clampf(omega, -max_allowed_omega, max_allowed_omega)
 	return ok

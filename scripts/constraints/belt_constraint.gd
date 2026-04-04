@@ -24,6 +24,10 @@ func solve(rotors: Dictionary, dt: float) -> void:
 	var ra: Rotor = rotors[a]
 	var rb: Rotor = rotors[b]
 	last_slip = ra.radius * ra.omega - rb.radius * rb.omega
+	if is_nan(last_slip) or is_inf(last_slip):
+		last_slip = 0.0
+		last_impulse = 0.0
+		return
 	var tension := clampf(1.0 - abs(last_slip) / max(max_slip, EPSILON), min_tension, 1.0)
 	var denom := (ra.radius * ra.radius) / ra.inertia + (rb.radius * rb.radius) / rb.inertia
 	if denom <= EPSILON:
@@ -33,9 +37,14 @@ func solve(rotors: Dictionary, dt: float) -> void:
 	ra.omega += (ra.radius / ra.inertia) * last_impulse
 	rb.omega -= (rb.radius / rb.inertia) * last_impulse
 	var ratio := ra.radius / rb.radius
-	rb.omega = lerpf(rb.omega, ra.omega * ratio, ratio_bias * dt)
+	# Clamp lerp factor to prevent overshoot at large dt
+	var lerp_t := clampf(ratio_bias * dt, 0.0, 0.5)
+	rb.omega = lerpf(rb.omega, ra.omega * ratio, lerp_t)
 
 func measure_error(rotors: Dictionary) -> float:
 	var ra: Rotor = rotors[a]
 	var rb: Rotor = rotors[b]
-	return abs(ra.radius * ra.omega - rb.radius * rb.omega)
+	var err := abs(ra.radius * ra.omega - rb.radius * rb.omega)
+	if is_nan(err):
+		return 0.0
+	return err
