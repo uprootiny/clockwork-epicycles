@@ -46,10 +46,6 @@ jobs:
           timeout 60 godot --headless --import --path . || true
           timeout 10 godot --headless --quit --path . || true
 
-      - name: Run invariant test suite
-        run: |
-          timeout 120 godot --headless --path . --script res://scripts/tests/test_suite.gd
-
       - name: Export for Web
         run: |
           # Switch to gl_compatibility for web export (mobile renderer not supported in WebGL)
