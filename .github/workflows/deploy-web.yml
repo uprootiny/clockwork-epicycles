@@ -55,13 +55,10 @@ jobs:
           mkdir -p build/web
           godot --headless --verbose --path . --export-release "Web" build/web/index.html
 
-      - name: Add cross-origin headers
+      - name: Add COOP/COEP service worker for SharedArrayBuffer
         run: |
-          cat > build/web/_headers <<'HEADERS'
-          /*
-            Cross-Origin-Opener-Policy: same-origin
-            Cross-Origin-Embedder-Policy: require-corp
-          HEADERS
+          cp web/coi-serviceworker.js build/web/coi-serviceworker.js
+          sed -i 's|<head>|<head><script src="coi-serviceworker.js"></script>|' build/web/index.html
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
