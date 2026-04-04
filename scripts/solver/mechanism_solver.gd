@@ -30,9 +30,6 @@ func solve(rotors: Dictionary, constraints: Array, dt: float) -> void:
 			residual += err
 		last_iteration_count = i + 1
 		last_residual = residual
-		# Converged
-		if residual < convergence_threshold:
-			break
 		# Divergence: residual increasing significantly across iterations
 		if i > 2 and residual > prev_residual * 1.5:
 			divergence_detected = true
