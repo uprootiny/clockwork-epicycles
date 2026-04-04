@@ -51,3 +51,4 @@ common/physics_ticks_per_second=120
 [rendering]
 renderer/rendering_method="mobile"
 textures/canvas_textures/default_texture_filter=0
+limits/global_shader_variables/buffer_size=8192
