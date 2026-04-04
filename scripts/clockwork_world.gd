@@ -1,7 +1,7 @@
 extends Node2D
 
 const MechanismModel = preload("res://scripts/mechanism_model.gd")
-const RotorClass = preload("res://scripts/model/rotor.gd")
+const R = preload("res://scripts/model/rotor.gd")
 
 var model: MechanismModel
 @export var draw_debug_text := true
@@ -52,14 +52,14 @@ func _draw() -> void:
 	_draw_grid()
 	_draw_mechanism_base()
 	_draw_energy_spring()
-	var ring: Rotor = model.rotors["ring"]
-	var carrier: Rotor = model.rotors["carrier"]
-	var sun: Rotor = model.rotors["sun"]
-	var planet_a: Rotor = model.rotors["planet_a"]
-	var planet_b: Rotor = model.rotors["planet_b"]
-	var dial: Rotor = model.rotors["dial"]
-	var escapement: Rotor = model.rotors["escapement"]
-	var balance: Rotor = model.rotors["balance"]
+	var ring: RefCounted = model.rotors["ring"]
+	var carrier: RefCounted = model.rotors["carrier"]
+	var sun: RefCounted = model.rotors["sun"]
+	var planet_a: RefCounted = model.rotors["planet_a"]
+	var planet_b: RefCounted = model.rotors["planet_b"]
+	var dial: RefCounted = model.rotors["dial"]
+	var escapement: RefCounted = model.rotors["escapement"]
+	var balance: RefCounted = model.rotors["balance"]
 	_draw_gear(ring)
 	_draw_carrier(carrier)
 	_draw_gear(sun)
@@ -92,7 +92,7 @@ func _draw_mechanism_base() -> void:
 	draw_arc(MechanismModel.CENTER, 286.0, 0.0, MechanismModel.TAU_F, 96, Color("2e3446"), 10.0)
 	draw_arc(MechanismModel.CENTER, 214.0, 0.0, MechanismModel.TAU_F, 96, Color("2a3040"), 6.0)
 	draw_rect(Rect2(MechanismModel.BALANCE_CENTER + Vector2(-126.0, -134.0), Vector2(252.0, 268.0)), Color(0.08, 0.09, 0.13, 0.42), false, 4.0)
-	var esc: Rotor = model.rotors["escapement"]
+	var esc: RefCounted = model.rotors["escapement"]
 	draw_line(esc.center, MechanismModel.BALANCE_CENTER, Color("444b61"), 12.0)
 	draw_rect(Rect2(MechanismModel.FLYWHEEL_CENTER + Vector2(-154.0, -102.0), Vector2(280.0, 204.0)), Color(0.06, 0.10, 0.11, 0.26), false, 3.0)
 	draw_rect(Rect2(MechanismModel.GENEVA_CENTER + Vector2(-84.0, -64.0), Vector2(168.0, 128.0)), Color(0.08, 0.10, 0.16, 0.24), false, 3.0)
@@ -113,7 +113,7 @@ func _draw_energy_spring() -> void:
 	draw_circle(ending, 18.0, Color("6a5830"))
 	draw_line(ending, MechanismModel.CENTER + Vector2(-74.0, 0.0), Color("7f6f3e"), 8.0)
 
-func _draw_carrier(rotor: Rotor) -> void:
+func _draw_carrier(rotor: RefCounted) -> void:
 	var arm_angles: Array[float] = [rotor.theta, rotor.theta + PI]
 	for angle in arm_angles:
 		var p1: Vector2 = MechanismModel.CENTER + Vector2(cos(angle), sin(angle)) * 28.0
@@ -124,7 +124,7 @@ func _draw_carrier(rotor: Rotor) -> void:
 	draw_arc(MechanismModel.CENTER, 148.0, rotor.theta - 0.5, rotor.theta + 0.5, 32, Color("75809c"), 8.0)
 	draw_arc(MechanismModel.CENTER, 148.0, rotor.theta + PI - 0.5, rotor.theta + PI + 0.5, 32, Color("75809c"), 8.0)
 
-func _draw_gear(rotor: Rotor) -> void:
+func _draw_gear(rotor: RefCounted) -> void:
 	if rotor.is_internal:
 		_draw_internal_ring(rotor)
 		return
@@ -142,7 +142,7 @@ func _draw_gear(rotor: Rotor) -> void:
 	draw_circle(center, max(10.0, outer * 0.16), Color(0.95, 0.95, 0.95, 0.22))
 	draw_circle(center, max(5.0, outer * 0.07), Color("0f1118"))
 
-func _draw_internal_ring(rotor: Rotor) -> void:
+func _draw_internal_ring(rotor: RefCounted) -> void:
 	var center: Vector2 = rotor.center
 	var outer: float = rotor.display_radius
 	var inner: float = outer - 46.0
@@ -156,7 +156,7 @@ func _draw_internal_ring(rotor: Rotor) -> void:
 		draw_line(p1, p2, rotor.color.lightened(0.22), 2.0)
 	draw_arc(center, inner - 34.0, 0.0, MechanismModel.TAU_F, 64, Color("11131b"), 4.0)
 
-func _draw_spokes(rotor: Rotor) -> void:
+func _draw_spokes(rotor: RefCounted) -> void:
 	var center: Vector2 = rotor.center
 	var hub: float = max(14.0, rotor.display_radius * 0.16)
 	var spoke_length: float = rotor.display_radius * 0.62
@@ -168,7 +168,7 @@ func _draw_spokes(rotor: Rotor) -> void:
 		var p2: Vector2 = center + Vector2(cos(angle), sin(angle)) * spoke_length
 		draw_line(p1, p2, rotor.color.lightened(0.32), 5.0)
 
-func _draw_balance(balance: Rotor) -> void:
+func _draw_balance(balance: RefCounted) -> void:
 	draw_circle(MechanismModel.BALANCE_CENTER, balance.display_radius, Color(0.06, 0.09, 0.12, 0.28))
 	draw_arc(MechanismModel.BALANCE_CENTER, balance.display_radius, 0.0, MechanismModel.TAU_F, 64, balance.color, 8.0)
 	for i in range(4):
@@ -188,8 +188,8 @@ func _draw_balance(balance: Rotor) -> void:
 	]), Color("7dcfff"), 3.0)
 
 func _draw_anchor() -> void:
-	var escapement: Rotor = model.rotors["escapement"]
-	var balance: Rotor = model.rotors["balance"]
+	var escapement: RefCounted = model.rotors["escapement"]
+	var balance: RefCounted = model.rotors["balance"]
 	var anchor_root: Vector2 = (escapement.center + MechanismModel.BALANCE_CENTER) * 0.5 + Vector2(-18.0, 0.0)
 	var swing: float = clampf(balance.theta / MechanismModel.ESCAPEMENT_ENGAGE_ANGLE, -1.0, 1.0) * 0.46
 	var left_tip: Vector2 = anchor_root + Vector2(cos(PI * 0.72 + swing), sin(PI * 0.72 + swing)) * 56.0
@@ -202,8 +202,8 @@ func _draw_anchor() -> void:
 	draw_line(anchor_root, MechanismModel.BALANCE_CENTER + Vector2(-balance.display_radius + 6.0, 0.0), Color("5b6078"), 6.0)
 
 func _draw_belt_and_flywheel() -> void:
-	var dial: Rotor = model.rotors["dial"]
-	var flywheel: Rotor = model.rotors["flywheel"]
+	var dial: RefCounted = model.rotors["dial"]
+	var flywheel: RefCounted = model.rotors["flywheel"]
 	var offset := Vector2(0.0, 14.0)
 	draw_line(dial.center + offset, flywheel.center + offset, Color("8bd5ca"), 6.0)
 	draw_line(dial.center - offset, flywheel.center - offset, Color("8bd5ca"), 6.0)
@@ -212,7 +212,7 @@ func _draw_belt_and_flywheel() -> void:
 	draw_arc((dial.center + flywheel.center) * 0.5 + Vector2(0.0, -32.0), 24.0, PI * 0.1, PI * (0.1 + slip), 16, Color("f9e2af"), 4.0)
 
 func _draw_cam_follower_and_hammer() -> void:
-	var flywheel: Rotor = model.rotors["flywheel"]
+	var flywheel: RefCounted = model.rotors["flywheel"]
 	var cam_dir: Vector2 = Vector2(cos(flywheel.theta), sin(flywheel.theta))
 	var cam_tip: Vector2 = flywheel.center + cam_dir * (flywheel.display_radius - 12.0)
 	draw_line(flywheel.center, cam_tip, Color("d3c6aa"), 6.0)
@@ -231,8 +231,8 @@ func _draw_cam_follower_and_hammer() -> void:
 	draw_circle(hammer_tip, 10.0, Color("f38ba8"))
 
 func _draw_clickwheel_and_geneva() -> void:
-	var clickwheel: Rotor = model.rotors["clickwheel"]
-	var geneva: Rotor = model.rotors["geneva"]
+	var clickwheel: RefCounted = model.rotors["clickwheel"]
+	var geneva: RefCounted = model.rotors["geneva"]
 	_draw_gear(clickwheel)
 	_draw_geneva(geneva)
 	var pawl_start: Vector2 = MechanismModel.BELL_CENTER + Vector2(-32.0, -62.0)
@@ -242,7 +242,7 @@ func _draw_clickwheel_and_geneva() -> void:
 	draw_line(clickwheel.center, geneva_driver, Color("f9e2af"), 6.0)
 	draw_line(geneva_driver, geneva.center, Color("45475a"), 2.0)
 
-func _draw_geneva(rotor: Rotor) -> void:
+func _draw_geneva(rotor: RefCounted) -> void:
 	var center: Vector2 = rotor.center
 	draw_circle(center, rotor.display_radius * 0.24, Color("0f1118"))
 	for i in range(4):
@@ -279,14 +279,14 @@ func _draw_clock_hand(center: Vector2, length: float, angle: float, color: Color
 	draw_circle(center, width * 0.8, color)
 
 func _draw_debug_overlay() -> void:
-	var sun: Rotor = model.rotors["sun"]
-	var carrier: Rotor = model.rotors["carrier"]
-	var ring: Rotor = model.rotors["ring"]
-	var dial: Rotor = model.rotors["dial"]
-	var flywheel: Rotor = model.rotors["flywheel"]
-	var escapement: Rotor = model.rotors["escapement"]
-	var balance: Rotor = model.rotors["balance"]
-	var geneva: Rotor = model.rotors["geneva"]
+	var sun: RefCounted = model.rotors["sun"]
+	var carrier: RefCounted = model.rotors["carrier"]
+	var ring: RefCounted = model.rotors["ring"]
+	var dial: RefCounted = model.rotors["dial"]
+	var flywheel: RefCounted = model.rotors["flywheel"]
+	var escapement: RefCounted = model.rotors["escapement"]
+	var balance: RefCounted = model.rotors["balance"]
+	var geneva: RefCounted = model.rotors["geneva"]
 	var stats: Array[String] = [
 		"Clockwork epicyclic train + belt + cam + hammer + ratchet + Geneva",
 		"sun w = %.3f | carrier w = %.3f | ring w = %.3f" % [sun.omega, carrier.omega, ring.omega],
