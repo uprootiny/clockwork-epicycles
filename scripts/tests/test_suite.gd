@@ -14,29 +14,26 @@ func _initialize() -> void:
 	print("[TEST] starting expanded mechanism suite")
 	model = MechanismModel.new()
 	baseline = model.get_snapshot()
+	# Run the entire simulation synchronously to avoid headless _process timing issues
+	_run_simulation()
 
-func _process(delta: float) -> bool:
-	if done:
-		return true
-	# Step multiple times per frame to finish faster in headless mode
-	var steps_per_frame := 10
-	for _s in range(steps_per_frame):
-		elapsed += delta
-		model.step(delta)
-	if phase == 0 and elapsed >= 2.0:
-		_run_midpoint_checks()
-		energy_after_warmup = model.total_energy()
-		phase = 1
-	elif phase == 1 and elapsed >= 6.0:
-		_run_final_checks()
-		_finish()
-		return true
-	if elapsed > 30.0:
-		push_error("[TEST] FAIL: timeout after 30s")
-		quit(1)
-		done = true
-		return true
-	return false
+func _run_simulation() -> void:
+	var fixed_dt := 1.0 / 120.0
+	# Phase 1: run to 2 seconds
+	while elapsed < 2.0:
+		model.step(fixed_dt)
+		elapsed += fixed_dt
+	_run_midpoint_checks()
+	energy_after_warmup = model.total_energy()
+	# Phase 2: run to 6 seconds
+	while elapsed < 6.0:
+		model.step(fixed_dt)
+		elapsed += fixed_dt
+	_run_final_checks()
+	_finish()
+
+func _process(_delta: float) -> bool:
+	return true
 
 func _run_midpoint_checks() -> void:
 	var snap: Dictionary = model.get_snapshot()
