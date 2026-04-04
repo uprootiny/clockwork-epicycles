@@ -40,9 +40,10 @@ jobs:
           unzip -q -o templates.tpz -d /tmp/godot_templates
           mv /tmp/godot_templates/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
 
-      - name: Import project
+      - name: Clean import project
         run: |
-          timeout 30 godot --headless --import --path . || true
+          rm -rf .godot/
+          timeout 60 godot --headless --import --path . || true
           timeout 10 godot --headless --quit --path . || true
 
       - name: Run invariant test suite
