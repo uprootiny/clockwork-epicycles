@@ -6,6 +6,9 @@ config/name="ClockworkEpicycles"
 run/main_scene="res://main.tscn"
 config/features=PackedStringArray("4.2")
 
+[audio]
+driver/mix_rate=44100
+
 [display]
 window/size/viewport_width=1440
 window/size/viewport_height=900
@@ -46,6 +49,5 @@ brake_less={
 common/physics_ticks_per_second=120
 
 [rendering]
-renderer/rendering_method="mobile"
+renderer/rendering_method="gl_compatibility"
 textures/canvas_textures/default_texture_filter=0
-anti_aliasing/quality/msaa_2d=2

@@ -308,11 +308,11 @@ func _update_positions() -> void:
 		rotor.center = CENTER + Vector2(cos(orbit_angle), sin(orbit_angle)) * rotor.orbit_radius
 
 func _update_activity(delta: float) -> void:
-	var carrier_speed := abs((rotors["carrier"] as Rotor).omega)
-	var planet_speed := abs((rotors["planet_a"] as Rotor).omega) + abs((rotors["planet_b"] as Rotor).omega)
-	var dial_speed := abs((rotors["dial"] as Rotor).omega) + abs((rotors["escapement"] as Rotor).omega)
-	var balance_motion := abs((rotors["balance"] as Rotor).theta) + 0.4 * abs((rotors["balance"] as Rotor).omega)
-	var aux_motion := 0.20 * abs((rotors["flywheel"] as Rotor).omega) + 0.14 * abs((rotors["geneva"] as Rotor).omega) + 0.02 * follower_height + 0.25 * abs(bell_omega)
+	var carrier_speed: float = abs((rotors["carrier"] as Rotor).omega)
+	var planet_speed: float = abs((rotors["planet_a"] as Rotor).omega) + abs((rotors["planet_b"] as Rotor).omega)
+	var dial_speed: float = abs((rotors["dial"] as Rotor).omega) + abs((rotors["escapement"] as Rotor).omega)
+	var balance_motion: float = abs((rotors["balance"] as Rotor).theta) + 0.4 * abs((rotors["balance"] as Rotor).omega)
+	var aux_motion: float = 0.20 * abs((rotors["flywheel"] as Rotor).omega) + 0.14 * abs((rotors["geneva"] as Rotor).omega) + 0.02 * follower_height + 0.25 * abs(bell_omega)
 	activity_measure += delta * (carrier_speed + 0.25 * planet_speed + 0.33 * dial_speed + 0.22 * balance_motion + aux_motion)
 	if activity_measure > 2.2 and momentum_score > 0.9 and (belt_energy_accum + cam_energy_accum + strike_energy_accum) > 0.4 and total_constraint_error < 6.0 and last_sanitize_ok:
 		activity_detected = true
