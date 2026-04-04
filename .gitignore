@@ -1,0 +1,20 @@
+# Godot
+.import/
+.godot/
+build/
+*.translation
+
+# macOS
+*.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Docker
+.dockerignore
