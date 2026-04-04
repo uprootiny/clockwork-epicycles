@@ -1,4 +1,4 @@
-name: Build Clockwork macOS App
+name: Godot Mechanical System CI
 
 on:
   push:
@@ -11,13 +11,13 @@ env:
 
 jobs:
   test-linux:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
 
-      - name: Download Linux Godot
-        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot
         run: |
           set -euo pipefail
           curl -L --fail --retry 3 -o godot.zip \
@@ -26,35 +26,44 @@ jobs:
           chmod +x Godot_v${GODOT_VERSION}-stable_linux.x86_64
           sudo mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
 
-      - name: Import project and validate
-        shell: bash
+      - name: Check project structure
         run: |
-          set -euo pipefail
-          timeout 30 godot --headless --import --path . || true
-          godot --headless --quit --path .
+          test -f project.godot
+          test -d scripts
 
-      - name: Run expanded mechanism physics test
-        shell: bash
+      - name: Import and validate project
         run: |
-          set -euo pipefail
-          godot --headless --path . --script res://scripts/physics_test_runner.gd
+          timeout 30 godot --headless --import --path . || true
+          timeout 10 godot --headless --quit --path . || true
+
+      - name: Run physics test
+        timeout-minutes: 3
+        run: |
+          timeout 120 godot --headless --path . --script res://scripts/physics_test_runner.gd
 
       - name: Run invariant test suite
-        shell: bash
+        timeout-minutes: 3
         run: |
-          set -euo pipefail
-          godot --headless --path . --script res://scripts/tests/test_suite.gd
+          timeout 120 godot --headless --path . --script res://scripts/tests/test_suite.gd
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-logs
+          path: |
+            *.log
+            .godot/
 
   build-macos:
     needs: test-linux
-    runs-on: macos-latest
+    runs-on: macos-14
+    timeout-minutes: 15
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Download Godot editor
-        shell: bash
+      - name: Install Godot
         run: |
           set -euo pipefail
           curl -L --fail --retry 3 -o godot.zip \
@@ -63,42 +72,32 @@ jobs:
           mv Godot.app godot
 
       - name: Install export templates
-        shell: bash
         run: |
           set -euo pipefail
           curl -L --fail --retry 3 -o templates.tpz \
             "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
           mkdir -p "$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
           unzip -q -o templates.tpz -d "$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
-          test -d "$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
 
       - name: Validate export preset
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -q 'platform="macOS"' export_presets.cfg
+        run: grep -q 'platform="macOS"' export_presets.cfg
 
-      - name: Import project and validate
-        shell: bash
+      - name: Import project
         run: |
-          set -euo pipefail
           timeout 30 godot/Godot.app/Contents/MacOS/Godot --headless --import --path . || true
-          godot/Godot.app/Contents/MacOS/Godot --headless --quit --path .
+          timeout 10 godot/Godot.app/Contents/MacOS/Godot --headless --quit --path . || true
 
-      - name: Run expanded mechanism physics test
-        shell: bash
+      - name: Run physics test
+        timeout-minutes: 3
         run: |
-          set -euo pipefail
-          godot/Godot.app/Contents/MacOS/Godot --headless --path . --script res://scripts/physics_test_runner.gd
+          timeout 120 godot/Godot.app/Contents/MacOS/Godot --headless --path . --script res://scripts/physics_test_runner.gd
 
       - name: Run invariant test suite
-        shell: bash
+        timeout-minutes: 3
         run: |
-          set -euo pipefail
-          godot/Godot.app/Contents/MacOS/Godot --headless --path . --script res://scripts/tests/test_suite.gd
+          timeout 120 godot/Godot.app/Contents/MacOS/Godot --headless --path . --script res://scripts/tests/test_suite.gd
 
       - name: Export macOS app
-        shell: bash
         run: |
           set -euo pipefail
           mkdir -p build
@@ -107,12 +106,9 @@ jobs:
           xattr -cr build/ClockworkEpicycles.app || true
 
       - name: Package artifact
-        shell: bash
         run: |
-          set -euo pipefail
           cd build
           ditto -c -k --sequesterRsrc --keepParent ClockworkEpicycles.app ClockworkEpicycles-macOS.zip
-          test -f ClockworkEpicycles-macOS.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

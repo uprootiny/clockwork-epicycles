@@ -8,6 +8,7 @@ var elapsed := 0.0
 var phase := 0
 var baseline: Dictionary = {}
 var energy_after_warmup := 0.0
+var done := false
 
 func _initialize() -> void:
 	print("[TEST] starting expanded mechanism suite")
@@ -15,6 +16,8 @@ func _initialize() -> void:
 	baseline = model.get_snapshot()
 
 func _process(delta: float) -> bool:
+	if done:
+		return true
 	elapsed += delta
 	model.step(delta)
 	if phase == 0 and elapsed >= 2.0:
@@ -24,6 +27,12 @@ func _process(delta: float) -> bool:
 	elif phase == 1 and elapsed >= 6.0:
 		_run_final_checks()
 		_finish()
+		return true
+	if elapsed > 30.0:
+		push_error("[TEST] FAIL: timeout after 30s")
+		quit(1)
+		done = true
+		return true
 	return false
 
 func _run_midpoint_checks() -> void:
@@ -62,6 +71,7 @@ func _assert(cond: bool, message: String) -> void:
 		failures.append(message)
 
 func _finish() -> void:
+	done = true
 	if failures.is_empty():
 		print("[TEST] ALL PASSED")
 		quit(0)

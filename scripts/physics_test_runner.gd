@@ -3,6 +3,7 @@ extends SceneTree
 var elapsed := 0.0
 var scene_root: Node = null
 var baseline: Dictionary = {}
+var done := false
 
 func _initialize() -> void:
 	print("[TEST] booting clockwork scene")
@@ -17,12 +18,21 @@ func _initialize() -> void:
 		baseline = scene_root.get_activity_snapshot()
 
 func _process(delta: float) -> bool:
+	if done:
+		return true
 	elapsed += delta
 	if elapsed > 7.0:
 		_validate_and_quit()
+		return true
+	if elapsed > 30.0:
+		push_error("[TEST] FAIL: timeout after 30s")
+		quit(1)
+		done = true
+		return true
 	return false
 
 func _validate_and_quit() -> void:
+	done = true
 	if scene_root == null:
 		push_error("[TEST] FAIL: scene root missing")
 		quit(1)
