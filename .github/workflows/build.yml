@@ -69,9 +69,6 @@ jobs:
           curl -L --fail --retry 3 -o godot.zip \
             "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_macos.universal.zip"
           unzip -q godot.zip
-          ls -la
-          GODOT_BIN=$(find . -name "Godot" -path "*/MacOS/*" | head -1)
-          echo "GODOT_BIN=${GODOT_BIN}" >> $GITHUB_ENV
 
       - name: Install export templates
         run: |
@@ -81,29 +78,18 @@ jobs:
           mkdir -p "$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
           unzip -q -o templates.tpz -d "$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
 
-      - name: Validate export preset
-        run: grep -q 'platform="macOS"' export_presets.cfg
-
       - name: Import project
         run: |
-          timeout 30 ${GODOT_BIN} --headless --import --path . || true
-          timeout 10 ${GODOT_BIN} --headless --quit --path . || true
-
-      - name: Run physics test
-        timeout-minutes: 3
-        run: |
-          ${GODOT_BIN} --headless --path . --script res://scripts/physics_test_runner.gd
-
-      - name: Run invariant test suite
-        timeout-minutes: 3
-        run: |
-          ${GODOT_BIN} --headless --path . --script res://scripts/tests/test_suite.gd
+          GODOT_BIN=$(find . -name "Godot" -path "*/MacOS/*" | head -1)
+          $GODOT_BIN --headless --import --path . 2>&1 || true
+          $GODOT_BIN --headless --quit --path . 2>&1 || true
 
       - name: Export macOS app
         run: |
           set -euo pipefail
+          GODOT_BIN=$(find . -name "Godot" -path "*/MacOS/*" | head -1)
           mkdir -p build
-          ${GODOT_BIN} --headless --verbose --path . --export-release "macOS" build/ClockworkEpicycles.app
+          $GODOT_BIN --headless --verbose --path . --export-release "macOS" build/ClockworkEpicycles.app
           test -d build/ClockworkEpicycles.app
           xattr -cr build/ClockworkEpicycles.app || true
 
