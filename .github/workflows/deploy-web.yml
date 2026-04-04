@@ -37,7 +37,9 @@ jobs:
           curl -L --fail --retry 3 -o templates.tpz \
             "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
           mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
-          unzip -q -o templates.tpz -d ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          unzip -q -o templates.tpz -d /tmp/godot_templates
+          mv /tmp/godot_templates/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
+          ls ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/ | head -10
 
       - name: Import project
         run: |
