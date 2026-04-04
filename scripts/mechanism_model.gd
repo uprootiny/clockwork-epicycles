@@ -28,48 +28,48 @@ var solver: MechanismSolver
 var belt_constraint: BeltConstraint
 var escapement_constraint: EscapementConstraint
 
-var sim_time := 0.0
-var activity_detected := false
-var activity_measure := 0.0
-var spring_extension := 1.25
-var brake_fraction := 0.0
-var test_drive_enabled := true
-var paused := false
-var last_escape_impulse := 0.0
-var last_ring_to_dial_power := 0.0
-var last_belt_slip := 0.0
-var last_geneva_step := 0.0
-var last_cam_lift := 0.0
-var last_hammer_impulse := 0.0
-var last_click_impulse := 0.0
-var momentum_score := 0.0
-var drive_torque := 40.0
-var solver_iterations := 20
-var microsteps := 4
-var max_abs_omega := 0.0
-var last_sanitize_ok := true
+var sim_time: float = 0.0
+var activity_detected: bool = false
+var activity_measure: float = 0.0
+var spring_extension: float = 1.25
+var brake_fraction: float = 0.0
+var test_drive_enabled: bool = true
+var paused: bool = false
+var last_escape_impulse: float = 0.0
+var last_ring_to_dial_power: float = 0.0
+var last_belt_slip: float = 0.0
+var last_geneva_step: float = 0.0
+var last_cam_lift: float = 0.0
+var last_hammer_impulse: float = 0.0
+var last_click_impulse: float = 0.0
+var momentum_score: float = 0.0
+var drive_torque: float = 40.0
+var solver_iterations: int = 20
+var microsteps: int = 4
+var max_abs_omega: float = 0.0
+var last_sanitize_ok: bool = true
 
-var follower_height := 0.0
-var follower_velocity := 0.0
-var hammer_angle := -0.18
-var hammer_omega := 0.0
-var bell_angle := 0.0
-var bell_omega := 0.0
-var click_phase := 0.0
-var clickwheel_index := 0
-var geneva_target_phase := 0.0
-var belt_energy_accum := 0.0
-var cam_energy_accum := 0.0
-var strike_energy_accum := 0.0
-var ratchet_energy_accum := 0.0
-var geneva_energy_accum := 0.0
-var bell_energy_accum := 0.0
-var total_constraint_error := 0.0
-var total_energy_value := 0.0
-var input_power_estimate := 0.0
-var output_power_estimate := 0.0
-var measured_ratio_value := 0.0
-var expected_ratio_value := 0.0
+var follower_height: float = 0.0
+var follower_velocity: float = 0.0
+var hammer_angle: float = -0.18
+var hammer_omega: float = 0.0
+var bell_angle: float = 0.0
+var bell_omega: float = 0.0
+var click_phase: float = 0.0
+var clickwheel_index: int = 0
+var geneva_target_phase: float = 0.0
+var belt_energy_accum: float = 0.0
+var cam_energy_accum: float = 0.0
+var strike_energy_accum: float = 0.0
+var ratchet_energy_accum: float = 0.0
+var geneva_energy_accum: float = 0.0
+var bell_energy_accum: float = 0.0
+var total_constraint_error: float = 0.0
+var total_energy_value: float = 0.0
+var input_power_estimate: float = 0.0
+var output_power_estimate: float = 0.0
+var measured_ratio_value: float = 0.0
+var expected_ratio_value: float = 0.0
 
 func _init() -> void:
 	reset()
@@ -154,9 +154,9 @@ func step(delta: float) -> void:
 	if paused:
 		return
 	# Clamp delta to prevent blowup from tab-switch / window-unfocus spikes
-	var clamped_delta := clampf(delta, 0.0, 0.1)
-	var substeps := max(microsteps, 1)
-	var h := clamped_delta / float(substeps)
+	var clamped_delta: float = clampf(delta, 0.0, 0.1)
+	var substeps: int = max(microsteps, 1)
+	var h: float = clamped_delta / float(substeps)
 	for _i in range(substeps):
 		_step_simulation(h)
 	_update_positions()
@@ -172,7 +172,7 @@ func _step_simulation(h: float) -> void:
 	last_click_impulse = 0.0
 	_apply_drive_and_loads(h)
 	for rotor in rotors.values():
-		var r := rotor as Rotor
+		var r: Rotor = rotor as Rotor
 		r.apply_torque(h)
 		r.apply_damping(h)
 	solver.solve(rotors, constraints, h)
@@ -181,7 +181,7 @@ func _step_simulation(h: float) -> void:
 	_apply_ratchet_and_geneva(h)
 	last_sanitize_ok = true
 	for rotor in rotors.values():
-		var r2 := rotor as Rotor
+		var r2: Rotor = rotor as Rotor
 		r2.integrate(h, TAU_F * 1000.0)
 		last_sanitize_ok = r2.sanitize(MAX_SAFE_OMEGA) and last_sanitize_ok
 		max_abs_omega = max(max_abs_omega, abs(r2.omega))
@@ -203,17 +203,17 @@ func _apply_drive_and_loads(h: float) -> void:
 	var clickwheel: Rotor = rotors["clickwheel"]
 	var geneva: Rotor = rotors["geneva"]
 
-	var spring_target := 1.1 + 0.2 * sin(sim_time * 0.33)
+	var spring_target: float = 1.1 + 0.2 * sin(sim_time * 0.33)
 	spring_extension = lerpf(spring_extension, spring_target, 0.18 * h)
-	var spring_torque := drive_torque * spring_extension * (1.0 if test_drive_enabled else 0.0)
+	var spring_torque: float = drive_torque * spring_extension * (1.0 if test_drive_enabled else 0.0)
 	sun.torque += spring_torque
 	sun.torque += -SPRING_STIFFNESS * (sun.theta - SPRING_REST_ANGLE) * 0.08
 	input_power_estimate = abs(spring_torque * sun.omega)
 
-	var ring_sign := 0.0
+	var ring_sign: float = 0.0
 	if abs(ring.omega) > EPSILON:
 		ring_sign = sign(ring.omega)
-	var ring_load := -1.9 * ring.omega - 12.0 * brake_fraction * ring_sign
+	var ring_load: float = -1.9 * ring.omega - 12.0 * brake_fraction * ring_sign
 	ring.torque += ring_load
 
 	carrier.torque += -4.4 * carrier.omega
@@ -223,7 +223,7 @@ func _apply_drive_and_loads(h: float) -> void:
 	clickwheel.torque += -0.05 * clickwheel.omega
 	geneva.torque += -0.18 * geneva.omega - 0.45 * _wrap_pi(geneva.theta - geneva_target_phase)
 
-	var escape_window := _smoothstep(ESCAPEMENT_ENGAGE_ANGLE + 0.18, ESCAPEMENT_ENGAGE_ANGLE - 0.02, abs(balance.theta))
+	var escape_window: float = _smoothstep(ESCAPEMENT_ENGAGE_ANGLE + 0.18, ESCAPEMENT_ENGAGE_ANGLE - 0.02, abs(balance.theta))
 	escapement.torque += -0.6 * escapement.omega * escape_window
 
 	last_ring_to_dial_power = abs((ring.omega - dial.omega) * dial.omega)
@@ -231,11 +231,11 @@ func _apply_drive_and_loads(h: float) -> void:
 
 func _apply_cam_and_follower(h: float) -> void:
 	var flywheel: Rotor = rotors["flywheel"]
-	var cam_phase := wrapf(flywheel.theta, 0.0, TAU_F)
-	var lobe := 0.5 + 0.5 * sin(cam_phase)
-	var secondary := 0.5 + 0.5 * sin(2.0 * cam_phase + 0.7)
-	var target_height := 24.0 + 58.0 * pow(lobe, 1.8) + 16.0 * pow(secondary, 2.4)
-	var spring_force := 9.8 * (target_height - follower_height)
+	var cam_phase: float = wrapf(flywheel.theta, 0.0, TAU_F)
+	var lobe: float = 0.5 + 0.5 * sin(cam_phase)
+	var secondary: float = 0.5 + 0.5 * sin(2.0 * cam_phase + 0.7)
+	var target_height: float = 24.0 + 58.0 * pow(lobe, 1.8) + 16.0 * pow(secondary, 2.4)
+	var spring_force: float = 9.8 * (target_height - follower_height)
 	follower_velocity += spring_force * h
 	follower_velocity *= max(0.0, 1.0 - 4.2 * h)
 	follower_height += follower_velocity * h
@@ -243,21 +243,21 @@ func _apply_cam_and_follower(h: float) -> void:
 	last_cam_lift = follower_height
 	cam_energy_accum += h * abs(spring_force * follower_velocity)
 
-	var hammer_target := -0.28 + follower_height / 108.0 * 0.92
-	var hammer_torque := 18.0 * (hammer_target - hammer_angle) - 2.8 * hammer_omega
+	var hammer_target: float = -0.28 + follower_height / 108.0 * 0.92
+	var hammer_torque: float = 18.0 * (hammer_target - hammer_angle) - 2.8 * hammer_omega
 	hammer_omega += hammer_torque * h
 	hammer_omega *= max(0.0, 1.0 - 1.5 * h)
 	hammer_angle += hammer_omega * h
 	hammer_angle = clampf(hammer_angle, -0.48, 1.12)
 
 func _apply_hammer_and_bell(h: float) -> void:
-	var bell_restoring := -7.4 * bell_angle - 0.85 * bell_omega
+	var bell_restoring: float = -7.4 * bell_angle - 0.85 * bell_omega
 	bell_omega += bell_restoring * h
 	bell_angle += bell_omega * h
 	bell_angle = clampf(bell_angle, -1.5, 1.5)
 	bell_omega = clampf(bell_omega, -20.0, 20.0)
 	if hammer_angle > 0.86 and hammer_omega > 0.0:
-		var strike := min(hammer_omega * 0.18, 2.4)
+		var strike: float = min(hammer_omega * 0.18, 2.4)
 		bell_omega += strike
 		bell_omega = clampf(bell_omega, -20.0, 20.0)
 		hammer_omega *= -0.22
@@ -269,10 +269,10 @@ func _apply_hammer_and_bell(h: float) -> void:
 func _apply_ratchet_and_geneva(h: float) -> void:
 	var clickwheel: Rotor = rotors["clickwheel"]
 	var geneva: Rotor = rotors["geneva"]
-	var stroke_phase := _smoothstep(0.58, 0.96, hammer_angle)
-	var drive_direction := max(hammer_omega, 0.0)
+	var stroke_phase: float = _smoothstep(0.58, 0.96, hammer_angle)
+	var drive_direction: float = max(hammer_omega, 0.0)
 	if stroke_phase > 0.65 and drive_direction > 0.02:
-		var tooth_angle := TAU_F / 12.0
+		var tooth_angle: float = TAU_F / 12.0
 		click_phase += drive_direction * h * 0.74
 		if click_phase >= tooth_angle:
 			click_phase -= tooth_angle
@@ -288,7 +288,7 @@ func _apply_ratchet_and_geneva(h: float) -> void:
 	else:
 		clickwheel.omega *= max(0.0, 1.0 - 2.5 * h)
 	clickwheel.theta = lerpf(clickwheel.theta, float(clickwheel_index) * TAU_F / 12.0, 0.22)
-	var geneva_error := _wrap_pi(geneva_target_phase - geneva.theta)
+	var geneva_error: float = _wrap_pi(geneva_target_phase - geneva.theta)
 	geneva.omega += 4.4 * geneva_error * h
 	geneva.omega *= max(0.0, 1.0 - 1.1 * h)
 
@@ -304,7 +304,7 @@ func _update_positions() -> void:
 	rotors["geneva"].center = GENEVA_CENTER
 	for name in ["planet_a", "planet_b"]:
 		var rotor: Rotor = rotors[name]
-		var orbit_angle := (rotors["carrier"] as Rotor).theta + rotor.orbit_phase
+		var orbit_angle: float = (rotors["carrier"] as Rotor).theta + rotor.orbit_phase
 		rotor.center = CENTER + Vector2(cos(orbit_angle), sin(orbit_angle)) * rotor.orbit_radius
 
 func _update_activity(delta: float) -> void:
@@ -321,7 +321,7 @@ func _update_metrics() -> void:
 	total_constraint_error = get_constraint_error()
 	total_energy_value = total_energy()
 	# Cap accumulators to prevent float precision degradation over long runs
-	var accum_cap := 1e6
+	var accum_cap: float = 1e6
 	belt_energy_accum = minf(belt_energy_accum, accum_cap)
 	cam_energy_accum = minf(cam_energy_accum, accum_cap)
 	strike_energy_accum = minf(strike_energy_accum, accum_cap)
@@ -330,8 +330,8 @@ func _update_metrics() -> void:
 	bell_energy_accum = minf(bell_energy_accum, accum_cap)
 	momentum_score = minf(momentum_score, accum_cap)
 	output_power_estimate = abs((rotors["geneva"] as Rotor).omega * 0.18) + abs(bell_omega * 0.12) + abs((rotors["flywheel"] as Rotor).omega * 0.08)
-	var sun_omega := abs((rotors["sun"] as Rotor).omega)
-	var geneva_omega := abs((rotors["geneva"] as Rotor).omega)
+	var sun_omega: float = abs((rotors["sun"] as Rotor).omega)
+	var geneva_omega: float = abs((rotors["geneva"] as Rotor).omega)
 	measured_ratio_value = geneva_omega / max(sun_omega, EPSILON)
 	expected_ratio_value = 0.015
 	if belt_constraint != null:
@@ -343,13 +343,13 @@ func has_physics_activity() -> bool:
 	return activity_detected
 
 func get_constraint_error() -> float:
-	var total := 0.0
+	var total: float = 0.0
 	for c in constraints:
 		total += c.measure_error(rotors)
 	return total
 
 func total_energy() -> float:
-	var e := 0.0
+	var e: float = 0.0
 	for rotor in rotors.values():
 		e += (rotor as Rotor).kinetic_energy()
 	e += 0.5 * BALANCE_STIFFNESS * pow((rotors["balance"] as Rotor).theta, 2.0)
@@ -452,13 +452,13 @@ func get_modality_snapshot() -> Dictionary:
 	}
 
 func _add_rotor(config: Dictionary) -> void:
-	var rotor := RotorClass.new(config)
+	var rotor: Rotor = RotorClass.new(config)
 	rotors[rotor.name] = rotor
 
 func _smoothstep(edge0: float, edge1: float, x: float) -> float:
 	if abs(edge1 - edge0) <= EPSILON:
 		return 0.0
-	var t := clampf((x - edge0) / (edge1 - edge0), 0.0, 1.0)
+	var t: float = clampf((x - edge0) / (edge1 - edge0), 0.0, 1.0)
 	return t * t * (3.0 - 2.0 * t)
 
 func _wrap_pi(angle: float) -> float:

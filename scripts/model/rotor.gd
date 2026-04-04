@@ -1,22 +1,22 @@
 class_name Rotor
 extends RefCounted
 
-var name := ""
-var inertia := 1.0
-var radius := 1.0
-var display_radius := 32.0
-var color := Color.WHITE
-var spoke_count := 4
-var tooth_count := 20
-var damping := 0.02
-var orbit_radius := 0.0
-var orbit_phase := 0.0
-var is_internal := false
-var center := Vector2.ZERO
-var theta := 0.0
-var omega := 0.0
-var torque := 0.0
-var max_seen_omega := 0.0
+var name: String = ""
+var inertia: float = 1.0
+var radius: float = 1.0
+var display_radius: float = 32.0
+var color: Color = Color.WHITE
+var spoke_count: int = 4
+var tooth_count: int = 20
+var damping: float = 0.02
+var orbit_radius: float = 0.0
+var orbit_phase: float = 0.0
+var is_internal: bool = false
+var center: Vector2 = Vector2.ZERO
+var theta: float = 0.0
+var omega: float = 0.0
+var torque: float = 0.0
+var max_seen_omega: float = 0.0
 
 func _init(p_config: Dictionary = {}) -> void:
 	name = p_config.get("name", "")
@@ -50,7 +50,7 @@ func kinetic_energy() -> float:
 	return 0.5 * inertia * omega * omega
 
 func sanitize(max_allowed_omega: float) -> bool:
-	var ok := true
+	var ok: bool = true
 	if is_nan(theta) or is_inf(theta):
 		theta = 0.0
 		ok = false

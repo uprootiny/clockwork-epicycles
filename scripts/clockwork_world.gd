@@ -4,7 +4,7 @@ const MechanismModel = preload("res://scripts/mechanism_model.gd")
 const R = preload("res://scripts/model/rotor.gd")
 
 var model: MechanismModel
-@export var draw_debug_text := true
+@export var draw_debug_text: bool = true
 
 func _ready() -> void:
 	model = MechanismModel.new()
@@ -101,8 +101,8 @@ func _draw_mechanism_base() -> void:
 func _draw_energy_spring() -> void:
 	var start: Vector2 = MechanismModel.CENTER + Vector2(-364.0, 0.0)
 	var ending: Vector2 = MechanismModel.CENTER + Vector2(-210.0, 0.0)
-	var points := PackedVector2Array()
-	var turns := 11
+	var points: PackedVector2Array = PackedVector2Array()
+	var turns: int = 11
 	for i in range(turns + 1):
 		var t: float = float(i) / float(turns)
 		var x: float = lerpf(start.x, ending.x, t)
@@ -204,7 +204,7 @@ func _draw_anchor() -> void:
 func _draw_belt_and_flywheel() -> void:
 	var dial: RefCounted = model.rotors["dial"]
 	var flywheel: RefCounted = model.rotors["flywheel"]
-	var offset := Vector2(0.0, 14.0)
+	var offset: Vector2 = Vector2(0.0, 14.0)
 	draw_line(dial.center + offset, flywheel.center + offset, Color("8bd5ca"), 6.0)
 	draw_line(dial.center - offset, flywheel.center - offset, Color("8bd5ca"), 6.0)
 	_draw_gear(flywheel)
@@ -223,7 +223,7 @@ func _draw_cam_follower_and_hammer() -> void:
 	draw_line(follower_base, follower_top, Color("cba6f7"), 10.0)
 	draw_circle(follower_top, 10.0, Color("f5c2e7"))
 	var hammer_pivot: Vector2 = MechanismModel.BELL_CENTER + Vector2(-108.0, -22.0)
-	var hammer_len := 94.0
+	var hammer_len: float = 94.0
 	var hammer_tip: Vector2 = hammer_pivot + Vector2(cos(-0.8 + model.hammer_angle), sin(-0.8 + model.hammer_angle)) * hammer_len
 	draw_line(follower_top, hammer_pivot, Color("fab387"), 5.0)
 	draw_line(hammer_pivot, hammer_tip, Color("fab387"), 9.0)
@@ -297,7 +297,7 @@ func _draw_debug_overlay() -> void:
 		"activity = %.2f | momentum = %.2f | max |w| = %.2f" % [model.activity_measure, model.momentum_score, model.max_abs_omega],
 		"controls: space pause | up/down torque | left/right brake | d overlay | r reset",
 	]
-	var y := 24.0
+	var y: float = 24.0
 	var font: Font = ThemeDB.fallback_font
 	if font == null:
 		return

@@ -1,11 +1,11 @@
 class_name MechanismSolver
 extends RefCounted
 
-var max_iterations := 20
-var convergence_threshold := 0.001
-var last_iteration_count := 0
-var last_residual := 0.0
-var divergence_detected := false
+var max_iterations: int = 20
+var convergence_threshold: float = 0.001
+var last_iteration_count: int = 0
+var last_residual: float = 0.0
+var divergence_detected: bool = false
 
 func _init(p_max_iterations: int = 20, p_threshold: float = 0.001) -> void:
 	max_iterations = max(p_max_iterations, 1)
@@ -15,9 +15,9 @@ func solve(rotors: Dictionary, constraints: Array, dt: float) -> void:
 	last_iteration_count = 0
 	last_residual = 0.0
 	divergence_detected = false
-	var prev_residual := INF
+	var prev_residual: float = INF
 	for i in range(max_iterations):
-		var residual := 0.0
+		var residual: float = 0.0
 		for c in constraints:
 			c.solve(rotors, dt)
 			var err: float = c.measure_error(rotors)
