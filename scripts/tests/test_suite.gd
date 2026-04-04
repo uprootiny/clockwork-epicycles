@@ -18,8 +18,11 @@ func _initialize() -> void:
 func _process(delta: float) -> bool:
 	if done:
 		return true
-	elapsed += delta
-	model.step(delta)
+	# Step multiple times per frame to finish faster in headless mode
+	var steps_per_frame := 10
+	for _s in range(steps_per_frame):
+		elapsed += delta
+		model.step(delta)
 	if phase == 0 and elapsed >= 2.0:
 		_run_midpoint_checks()
 		energy_after_warmup = model.total_energy()
