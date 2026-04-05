@@ -272,7 +272,7 @@ func _apply_hammer_and_bell(h: float) -> void:
 func _apply_ratchet_and_geneva(h: float) -> void:
 	var clickwheel: Rotor = rotors["clickwheel"]
 	var geneva: Rotor = rotors["geneva"]
-	var stroke_phase: float = _smoothstep(0.58, 0.96, hammer_angle)
+	var stroke_phase: float = _smoothstep(0.35, 0.70, hammer_angle)
 	var drive_direction: float = max(hammer_omega, 0.0)
 	if stroke_phase > 0.65 and drive_direction > 0.02:
 		var tooth_angle: float = TAU_F / 12.0
