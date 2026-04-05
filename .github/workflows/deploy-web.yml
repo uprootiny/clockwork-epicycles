@@ -61,23 +61,6 @@ jobs:
           # Copy service worker
           cp web/coi-serviceworker.js build/web/coi-serviceworker.js
 
-          # Cache-bust: rename assets with commit hash to force browser reload
-          HASH=$(git rev-parse --short HEAD)
-          for ext in wasm pck js; do
-            for f in build/web/index.${ext}; do
-              [ -f "$f" ] && mv "$f" "build/web/index.${HASH}.${ext}"
-            done
-          done
-          # Update references in HTML
-          sed -i "s|index\\.wasm|index.${HASH}.wasm|g" build/web/index.html
-          sed -i "s|index\\.pck|index.${HASH}.pck|g" build/web/index.html
-          sed -i "s|\"index\\.js\"|\"index.${HASH}.js\"|g" build/web/index.html
-          # Update references in JS
-          if [ -f "build/web/index.${HASH}.js" ]; then
-            sed -i "s|index\\.wasm|index.${HASH}.wasm|g" "build/web/index.${HASH}.js"
-            sed -i "s|index\\.pck|index.${HASH}.pck|g" "build/web/index.${HASH}.js"
-          fi
-
           # Rename Godot's index.html to game.html
           mv build/web/index.html build/web/game.html
 
