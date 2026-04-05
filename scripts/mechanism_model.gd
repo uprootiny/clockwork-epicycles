@@ -283,10 +283,9 @@ func _apply_ratchet_and_geneva(h: float) -> void:
 			clickwheel_index = (clickwheel_index + 1) % 12
 			last_click_impulse = 1.0
 			ratchet_energy_accum += 1.0
-			if clickwheel_index % 3 == 0:
-				geneva_target_phase += PI / 2.0
-				last_geneva_step = 1.0
-				geneva_energy_accum += 1.0
+			geneva_target_phase += PI / 4.0
+			last_geneva_step = 1.0
+			geneva_energy_accum += 1.0
 	else:
 		clickwheel.omega *= max(0.0, 1.0 - 2.5 * h)
 	clickwheel.theta = lerpf(clickwheel.theta, float(clickwheel_index) * TAU_F / 12.0, 0.22)
