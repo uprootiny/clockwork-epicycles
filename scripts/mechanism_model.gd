@@ -242,6 +242,9 @@ func _apply_cam_and_follower(h: float) -> void:
 	follower_height = clampf(follower_height, 0.0, 108.0)
 	last_cam_lift = follower_height
 	cam_energy_accum += h * abs(spring_force * follower_velocity)
+	# Accumulate belt energy from constraint slip
+	if belt_constraint != null:
+		belt_energy_accum += h * abs(belt_constraint.last_slip * belt_constraint.last_impulse)
 
 	var hammer_target: float = -0.28 + follower_height / 108.0 * 0.92
 	var hammer_torque: float = 18.0 * (hammer_target - hammer_angle) - 2.8 * hammer_omega
