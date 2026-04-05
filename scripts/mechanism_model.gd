@@ -246,7 +246,7 @@ func _apply_cam_and_follower(h: float) -> void:
 	if belt_constraint != null:
 		belt_energy_accum += h * abs(belt_constraint.last_slip * belt_constraint.last_impulse)
 
-	var hammer_target: float = -0.28 + follower_height / 108.0 * 0.92
+	var hammer_target: float = -0.20 + follower_height / 108.0 * 1.25
 	var hammer_torque: float = 18.0 * (hammer_target - hammer_angle) - 2.8 * hammer_omega
 	hammer_omega += hammer_torque * h
 	hammer_omega *= max(0.0, 1.0 - 1.5 * h)
@@ -259,7 +259,7 @@ func _apply_hammer_and_bell(h: float) -> void:
 	bell_angle += bell_omega * h
 	bell_angle = clampf(bell_angle, -1.5, 1.5)
 	bell_omega = clampf(bell_omega, -20.0, 20.0)
-	if hammer_angle > 0.86 and hammer_omega > 0.0:
+	if hammer_angle > 0.62 and hammer_omega > 0.0:
 		var strike: float = min(hammer_omega * 0.18, 2.4)
 		bell_omega += strike
 		bell_omega = clampf(bell_omega, -20.0, 20.0)

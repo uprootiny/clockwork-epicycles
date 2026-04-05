@@ -41,9 +41,8 @@ jobs:
         run: |
           timeout 120 godot --headless --path . --script res://scripts/physics_test_runner.gd
 
-      - name: Run invariant test suite (non-blocking)
+      - name: Run invariant test suite
         timeout-minutes: 3
-        continue-on-error: true
         run: |
           timeout 120 godot --headless --path . --script res://scripts/tests/test_suite.gd
 

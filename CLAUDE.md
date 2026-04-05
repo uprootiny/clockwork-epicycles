@@ -2,32 +2,48 @@
 
 ## Quick start
 - Engine: Godot 4.2.2
-- Main scene: `main.tscn` → `scripts/clockwork_world.gd`
+- Main scene: `main.tscn` → 2D clockwork visualization
+- Armillary: `armillary.tscn` → 3D orrery with exact gear ratios
 - Run tests: `godot --headless --path . --script res://scripts/tests/test_suite.gd`
 
 ## Architecture
 ```
-model/rotor.gd          — state for each rotating component
-constraints/*.gd         — gear mesh, belt, escapement velocity constraints
-solver/mechanism_solver.gd — iterative solver with convergence check
-mechanism_model.gd       — composes all rotors + constraints + auxiliary subsystems
-clockwork_world.gd       — visualization and input handling (Node2D)
+main.tscn → clockwork_world.gd
+  └─ mechanism_model.gd (constraint-based 2D simulation)
+      ├─ model/rotor.gd
+      ├─ solver/mechanism_solver.gd
+      └─ constraints/{mesh,belt,escapement}_constraint.gd
+
+armillary.tscn → armillary_orrery.gd
+  └─ mechanism/exact/orrery_mechanism.gd (tooth-count-derived simulation)
+      ├─ gear_geometry.gd    (pitch radius, contact ratio from module+teeth)
+      ├─ bevel_geometry.gd   (cone angles, ω·sin(δ) law)
+      └─ contact_solver.gd   (velocity-level Baumgarte, Willis equation)
 ```
 
-## Key design decisions
-- Constraint-based velocity solver, not contact geometry — intentionally a toy
-- 4 substeps per physics frame (120 Hz physics = 480 solver ticks/sec)
-- Solver has early-exit on convergence (threshold 0.001)
-- NaN/Inf sanitization on every rotor every frame
-- Omega hard-clamped at 120 rad/s
+## Two simulation cores
+
+1. **mechanism_model.gd** — original constraint solver, 7 subsystems
+   (sun, carrier, planets, ring, dial, escapement, balance, flywheel,
+   cam/follower, hammer/bell, ratchet, Geneva). Velocity-projection
+   with 20 iterations.
+
+2. **mechanism/exact/** — tooth-count-derived model. All geometry from
+   `module=0.04` and tooth counts. Willis equation enforced by contact
+   dynamics. Bevel gear chain for armillary ring outputs.
+
+## Key invariants
+- Willis: (ω_sun - ω_carrier)/(ω_ring - ω_carrier) = -N_ring/N_sun
+- Tooth constraint: N_ring = N_sun + 2·N_planet (48 = 24 + 2×12)
+- Energy bounded, sanitized each frame
+- Delta clamped to 100ms max
 
 ## Test layers
-1. `godot --headless --quit --path .` — project loads
-2. `physics_test_runner.gd` — scene-level 7s motion test
-3. `tests/test_suite.gd` — invariant checks at 2s and 6s marks
-4. Docker container build + run
+1. `physics_test_runner.gd` — scene-level 7s motion test
+2. `tests/test_suite.gd` — invariant checks at 2s and 6s (synchronous)
+3. `tests/test_exact_epicyclic.gd` — geometry, Willis, energy validation
 
-## Tuning parameters
-Magic numbers in `mechanism_model.gd` are empirically tuned for stability.
-Constraint compliance values (0.86–0.97) control how aggressively velocity
-errors are corrected per iteration. Lower = softer coupling.
+## Web deploy
+Exported to GitHub Pages via `deploy-web.yml`. Service worker handles
+COOP/COEP for SharedArrayBuffer. Renderer patched to gl_compatibility
+for WebGL. Text-mode script export (not compiled bytecode).

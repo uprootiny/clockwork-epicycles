@@ -1,6 +1,0 @@
-[gd_scene load_steps=2 format=3 uid="uid://clockwork_sphere_scene"]
-
-[ext_resource type="Script" path="res://scripts/sphere_clockwork.gd" id="1_sphere"]
-
-[node name="SphereClockwork" type="Node3D"]
-script = ExtResource("1_sphere")
