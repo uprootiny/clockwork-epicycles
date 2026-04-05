@@ -1,7 +1,6 @@
 extends Node2D
 
 const MechanismModel = preload("res://scripts/mechanism_model.gd")
-const R = preload("res://scripts/model/rotor.gd")
 
 var model: MechanismModel
 @export var draw_debug_text: bool = true
