@@ -48,8 +48,9 @@ jobs:
 
       - name: Export for Web
         run: |
-          # Switch to gl_compatibility for web export (mobile renderer not supported in WebGL)
+          # Switch to sphere scene + gl_compatibility for web export
           sed -i 's|renderer/rendering_method="mobile"|renderer/rendering_method="gl_compatibility"|' project.godot
+          sed -i 's|run/main_scene="res://main.tscn"|run/main_scene="res://sphere.tscn"|' project.godot
           sed -i '/anti_aliasing/d' project.godot
           mkdir -p build/web
           godot --headless --verbose --path . --export-release "Web" build/web/index.html
