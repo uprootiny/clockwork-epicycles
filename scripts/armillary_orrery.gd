@@ -17,10 +17,10 @@ extends Node3D
 ## Each ring has gear teeth on its inner/outer edge.
 ## Adjacent rings mesh through bevel gears at their intersection points.
 
-const MechanismModelClass = preload("res://scripts/mechanism_model.gd")
+const OrreryMechanismClass = preload("res://scripts/mechanism/exact/orrery_mechanism.gd")
 const TAU_F: float = PI * 2.0
 
-var model: RefCounted
+var mech: RefCounted  # OrreryMechanism
 var time_acc: float = 0.0
 var orbit_angle: float = 0.0
 var auto_orbit: bool = true
@@ -58,8 +58,8 @@ var mat_shaft: StandardMaterial3D
 var mat_lantern_bar: StandardMaterial3D
 
 func _ready() -> void:
-	model = MechanismModelClass.new()
-	model.reset()
+	mech = OrreryMechanismClass.new()
+	print(mech.get_report())
 	_create_materials()
 	_setup_lighting()
 	_build_drive_shaft()
@@ -71,7 +71,7 @@ func _ready() -> void:
 	_create_camera()
 
 func _physics_process(delta: float) -> void:
-	model.step(delta)
+	mech.step(delta)
 	time_acc += delta
 	_update_mechanism(delta)
 	if auto_orbit:
@@ -81,11 +81,11 @@ func _physics_process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:
 		match event.keycode:
-			KEY_SPACE: model.paused = not model.paused
-			KEY_R: model.reset(); ring_angles = [0.0, 0.0, 0.0, 0.0]
+			KEY_SPACE: mech.paused = not mech.paused
+			KEY_R: mech.reset()
 			KEY_O: auto_orbit = not auto_orbit
-			KEY_UP: model.drive_torque = min(model.drive_torque + 4.0, 80.0)
-			KEY_DOWN: model.drive_torque = max(model.drive_torque - 4.0, 4.0)
+			KEY_UP: mech.drive_torque = min(mech.drive_torque + 0.5, 10.0)
+			KEY_DOWN: mech.drive_torque = max(mech.drive_torque - 0.5, 0.1)
 
 # ═══════════════════ Materials ═══════════════════
 
@@ -523,44 +523,46 @@ func _build_differential() -> void:
 # ═══════════════════ Update ═══════════════════
 
 func _update_mechanism(delta: float) -> void:
-	var sun_omega: float = (model.rotors["sun"] as RefCounted).omega
-	var carrier_omega: float = (model.rotors["carrier"] as RefCounted).omega
-	var ring_omega: float = (model.rotors["ring"] as RefCounted).omega
-	var balance_omega: float = (model.rotors["balance"] as RefCounted).omega
+	var snap: Dictionary = mech.get_snapshot()
+	var sun_theta: float = float(snap["sun"]["theta"])
+	var sun_omega: float = float(snap["sun"]["omega"])
+	var carrier_theta: float = float(snap["carrier"]["theta"])
 
 	# Drive shaft rotates with sun
-	drive_shaft_node.rotation.y += sun_omega * delta
+	drive_shaft_node.rotation.y = sun_theta
 
-	# Crown gear is on the drive shaft (rotates with it)
-	# Lantern pinions spin as crown drives them
+	# Lantern pinions spin driven by crown
 	for lantern in lantern_nodes:
-		lantern.rotation.x += sun_omega * delta * 2.5
+		lantern.rotation.x = sun_theta * 2.5
 
 	# Differential cage follows carrier
-	differential_cage.rotation.y = (model.rotors["carrier"] as RefCounted).theta * 0.5
+	differential_cage.rotation.y = carrier_theta * 0.5
 
-	# Ring speeds derived from simulation via gear ratios
-	ring_angles[0] += sun_omega * ring_speeds[0] * delta
-	ring_angles[1] += carrier_omega * ring_speeds[1] * delta + balance_omega * 0.02 * delta
-	ring_angles[2] += ring_omega * ring_speeds[2] * delta
-	ring_angles[3] += carrier_omega * ring_speeds[3] * delta
+	# Rings driven by exact mechanism outputs
+	if ring_nodes.size() >= 4:
+		ring_nodes[0].rotation.y = float(snap["hour"]["theta"])
+		ring_nodes[1].rotation.y = float(snap["day"]["theta"])
+		ring_nodes[2].rotation.y = float(snap["month"]["theta"])
+		ring_nodes[3].rotation.y = float(snap["year"]["theta"])
 
-	for i in range(ring_count):
-		if i < ring_nodes.size():
-			ring_nodes[i].rotation.y = ring_angles[i]
-
-	# Bevel gears spin at the differential between adjacent ring speeds
+	# Bevel gears spin at the speed difference between adjacent rings
+	var ring_thetas: Array[float] = [
+		float(snap["hour"]["theta"]),
+		float(snap["day"]["theta"]),
+		float(snap["month"]["theta"]),
+		float(snap["year"]["theta"]),
+	]
 	for i in range(bevel_nodes.size()):
 		var pair_idx: int = i / 2
-		if pair_idx + 1 < ring_count:
-			var speed_diff: float = ring_angles[pair_idx] - ring_angles[pair_idx + 1]
-			bevel_nodes[i].rotation.x += speed_diff * delta * 3.0
+		if pair_idx + 1 < 4:
+			var diff: float = ring_thetas[pair_idx] - ring_thetas[pair_idx + 1]
+			bevel_nodes[i].rotation.x = diff * 2.0
 
 	# Core glow responds to energy
 	var core: OmniLight3D = get_node_or_null("core_glow")
 	if core != null:
-		var energy: float = clampf(abs(sun_omega) / 3.0, 0.3, 1.0)
-		core.light_energy = 0.6 + energy * 0.8 + sin(time_acc * 0.15) * 0.1
+		var energy_frac: float = clampf(abs(sun_omega) / 5.0, 0.2, 1.0)
+		core.light_energy = 0.6 + energy_frac * 0.8 + sin(time_acc * 0.15) * 0.1
 
 # ═══════════════════ Camera ═══════════════════
 
