@@ -1,274 +1,340 @@
 class_name ExactEpicyclic
 extends RefCounted
-## Exact epicyclic gear train derived from tooth geometry.
+## Complete epicyclic mechanism derived from tooth counts.
 ##
-## Everything is computed from tooth counts and module:
-##   - pitch radii
-##   - inertias (from mass and geometry)
-##   - gear ratios (exact integer ratios from tooth counts)
-##   - Willis equation enforced
-##   - contact forces from spring-damper at pitch point
+## Power flow:
+##   drive torque → sun
+##   sun meshes with planets (external, 3×)
+##   planets mesh with ring (internal, 3×)
+##   carrier output (slow, high torque)
+##   ring output (medium)
 ##
-## Tooth count constraint: N_ring = N_sun + 2 * N_planet
-## Willis equation: (ω_s - ω_c)/(ω_r - ω_c) = -N_r/N_s
+## Outputs feed downstream:
+##   carrier → hour hand (direct)
+##   ring → minute reduction via output gear pair
+##   sun → escapement regulation
+##
+## All geometry from: module=0.04, teeth=(24, 12, 48)
+## Willis: (ω_s - ω_c)/(ω_r - ω_c) = -48/24 = -2
+## Tooth constraint: 48 = 24 + 2×12 ✓
 
 const GearGeometryClass = preload("res://scripts/mechanism/exact/gear_geometry.gd")
 const ContactSolverClass = preload("res://scripts/mechanism/exact/contact_solver.gd")
 
-# ── Specification (tooth counts + module define everything) ──
+# ═══ Specification ═══
 
+# Epicyclic core
 var teeth_sun: int = 24
 var teeth_planet: int = 12
-var teeth_ring: int = 48        # must equal sun + 2*planet
+var teeth_ring: int = 48
 var num_planets: int = 3
-var module: float = 0.04        # meters per tooth (scale factor)
+var module: float = 0.04
 
-# Masses (kg) — geometry determines inertia
-var mass_sun: float = 0.8
-var mass_planet: float = 0.3
-var mass_carrier: float = 2.0
-var mass_ring: float = 3.0
+# Output reduction pair (ring → dial)
+var teeth_output_a: int = 40  # on ring shaft
+var teeth_output_b: int = 10  # dial pinion
 
-# Contact stiffness (N/m) and damping (N·s/m)
-var tooth_stiffness: float = 5e4
-var tooth_damping: float = 200.0
+# Escapement wheel (on sun shaft)
+var teeth_escape: int = 30
 
-# Bearing friction (N·m·s/rad)
-var bearing_friction_sun: float = 0.01
-var bearing_friction_carrier: float = 0.02
-var bearing_friction_ring: float = 0.015
+# Masses
+var mass_sun: float = 0.5
+var mass_planet: float = 0.2
+var mass_carrier: float = 1.5
+var mass_ring: float = 2.5
+var mass_output_a: float = 0.3
+var mass_output_b: float = 0.1
+var mass_escape: float = 0.15
+var mass_balance: float = 0.4
 
-# ── Derived geometry (computed once from spec) ──
+# Contact
+var contact_stiffness: float = 0.92  # compliance (0-1)
+var contact_damping: float = 0.08
+var solver_iterations: int = 20
+
+# Friction
+var friction_sun: float = 0.008
+var friction_carrier: float = 0.012
+var friction_ring: float = 0.010
+var friction_output: float = 0.006
+var friction_escape: float = 0.005
+var friction_balance: float = 0.003
+
+# Escapement
+var balance_stiffness: float = 6.0  # hairspring (N·m/rad)
+var balance_damping: float = 0.3
+var escape_engage_angle: float = 0.3  # radians
+
+# ═══ Compiled geometry ═══
 
 var geo_sun: GearGeometry
 var geo_planet: GearGeometry
 var geo_ring: GearGeometry
+var geo_out_a: GearGeometry
+var geo_out_b: GearGeometry
+var geo_escape: GearGeometry
 
-var inertia_sun: float
-var inertia_planet: float
-var inertia_carrier: float
-var inertia_ring: float
+var I_sun: float
+var I_planet: float
+var I_carrier: float
+var I_ring: float
+var I_out_a: float
+var I_out_b: float
+var I_escape: float
+var I_balance: float
+var carrier_radius: float
 
-var carrier_radius: float  # center distance sun-planet
-var contact_ratio_sp: float  # sun-planet
-var contact_ratio_pr: float  # planet-ring
-var willis_ratio: float
+# ═══ State ═══
 
-# ── Dynamic state ──
+var theta: PackedFloat64Array  # [sun, carrier, ring, planet0..2, out_a, out_b, escape, balance]
+var omega: PackedFloat64Array
+# Indices
+const SUN: int = 0
+const CARRIER: int = 1
+const RING: int = 2
+const PLANET0: int = 3
+# PLANET1 = 4, PLANET2 = 5
+const OUT_A: int = 6
+const OUT_B: int = 7
+const ESCAPE: int = 8
+const BALANCE: int = 9
+const STATE_SIZE: int = 10
 
-var theta_sun: float = 0.0
-var theta_carrier: float = 0.0
-var theta_ring: float = 0.0
-var theta_planets: PackedFloat64Array  # each planet's own spin
+var inertias: PackedFloat64Array
+var frictions: PackedFloat64Array
 
-var omega_sun: float = 0.0
-var omega_carrier: float = 0.0
-var omega_ring: float = 0.0
-var omega_planets: PackedFloat64Array
-
-var drive_torque: float = 2.0  # N·m applied to sun
-var brake_torque_ring: float = 0.0  # resistance on ring
+var drive_torque: float = 1.5
+var brake_ring: float = 0.0
 var sim_time: float = 0.0
 var paused: bool = false
 
-# ── Solver ──
-
 var contact: ContactSolver
 
-# ── Diagnostics ──
+# ═══ Diagnostics ═══
 
 var willis_error: float = 0.0
 var total_energy: float = 0.0
 var power_in: float = 0.0
-var power_dissipated: float = 0.0
-var contact_forces_sp: PackedFloat64Array  # per planet
-var contact_forces_pr: PackedFloat64Array
+var carrier_to_sun_ratio: float = 0.0
+var output_ratio: float = 0.0
+var escape_impulse: float = 0.0
 
 func _init() -> void:
-	compile()
+	_compile()
 	reset()
 
-func compile() -> void:
-	# Validate epicyclic constraint
-	assert(teeth_ring == teeth_sun + 2 * teeth_planet,
-		"Tooth count constraint violated: N_ring must equal N_sun + 2*N_planet")
-
-	# Derive geometry
-	geo_sun = GearGeometryClass.new(teeth_sun, module, false)
-	geo_planet = GearGeometryClass.new(teeth_planet, module, false)
+func _compile() -> void:
+	# Geometry from tooth counts
+	geo_sun = GearGeometryClass.new(teeth_sun, module)
+	geo_planet = GearGeometryClass.new(teeth_planet, module)
 	geo_ring = GearGeometryClass.new(teeth_ring, module, true)
+	geo_out_a = GearGeometryClass.new(teeth_output_a, module)
+	geo_out_b = GearGeometryClass.new(teeth_output_b, module)
+	geo_escape = GearGeometryClass.new(teeth_escape, module)
 
-	# Carrier radius = sun pitch radius + planet pitch radius
 	carrier_radius = geo_sun.pitch_radius + geo_planet.pitch_radius
 
-	# Inertias from mass and geometry
-	inertia_sun = geo_sun.disc_inertia(mass_sun)
-	inertia_planet = geo_planet.disc_inertia(mass_planet)
-	inertia_carrier = mass_carrier * carrier_radius * carrier_radius  # point masses at planet positions
-	inertia_ring = geo_ring.ring_inertia(mass_ring)
+	# Inertias from mass + geometry
+	I_sun = geo_sun.disc_inertia(mass_sun)
+	I_planet = geo_planet.disc_inertia(mass_planet)
+	I_carrier = mass_carrier * carrier_radius * carrier_radius
+	I_ring = geo_ring.ring_inertia(mass_ring)
+	I_out_a = geo_out_a.disc_inertia(mass_output_a)
+	I_out_b = geo_out_b.disc_inertia(mass_output_b)
+	I_escape = geo_escape.disc_inertia(mass_escape)
+	I_balance = 0.5 * mass_balance * 0.05 * 0.05  # small balance wheel
 
-	# Contact ratios (must be > 1 for continuous mesh)
-	contact_ratio_sp = geo_sun.contact_ratio_with(geo_planet)
-	contact_ratio_pr = geo_planet.contact_ratio_with(geo_ring)
+	# Pack into arrays
+	inertias = PackedFloat64Array()
+	inertias.resize(STATE_SIZE)
+	inertias[SUN] = I_sun
+	inertias[CARRIER] = I_carrier
+	inertias[RING] = I_ring
+	for p in range(num_planets):
+		inertias[PLANET0 + p] = I_planet
+	inertias[OUT_A] = I_out_a
+	inertias[OUT_B] = I_out_b
+	inertias[ESCAPE] = I_escape
+	inertias[BALANCE] = I_balance
 
-	# Willis ratio
-	willis_ratio = ContactSolverClass.willis_ratio(teeth_sun, teeth_ring)
+	frictions = PackedFloat64Array()
+	frictions.resize(STATE_SIZE)
+	frictions[SUN] = friction_sun
+	frictions[CARRIER] = friction_carrier
+	frictions[RING] = friction_ring
+	for p in range(num_planets):
+		frictions[PLANET0 + p] = 0.004
+	frictions[OUT_A] = friction_output
+	frictions[OUT_B] = friction_output
+	frictions[ESCAPE] = friction_escape
+	frictions[BALANCE] = friction_balance
 
-	# Solver
 	contact = ContactSolverClass.new()
 
-	# Planet arrays
-	theta_planets = PackedFloat64Array()
-	theta_planets.resize(num_planets)
-	omega_planets = PackedFloat64Array()
-	omega_planets.resize(num_planets)
-	contact_forces_sp = PackedFloat64Array()
-	contact_forces_sp.resize(num_planets)
-	contact_forces_pr = PackedFloat64Array()
-	contact_forces_pr.resize(num_planets)
-
 func reset() -> void:
-	theta_sun = 0.0
-	theta_carrier = 0.0
-	theta_ring = 0.0
-	omega_sun = 0.0
-	omega_carrier = 0.0
-	omega_ring = 0.0
+	theta = PackedFloat64Array()
+	theta.resize(STATE_SIZE)
+	omega = PackedFloat64Array()
+	omega.resize(STATE_SIZE)
+	for i in range(STATE_SIZE):
+		theta[i] = 0.0
+		omega[i] = 0.0
 	sim_time = 0.0
-	for i in range(num_planets):
-		theta_planets[i] = 0.0
-		omega_planets[i] = 0.0
-		contact_forces_sp[i] = 0.0
-		contact_forces_pr[i] = 0.0
 
 func step(delta: float) -> void:
 	if paused:
 		return
-	var substeps: int = 8  # higher substep count for contact stability
-	var h: float = min(delta, 0.05) / float(substeps)
-	for _i in range(substeps):
-		_step_once(h)
+	var h: float = min(delta, 0.05) / 8.0
+	for _s in range(8):
+		_substep(h)
 
-func _step_once(dt: float) -> void:
+func _substep(dt: float) -> void:
 	sim_time += dt
 
-	# ── 1. Apply external torques ──
-	var torque_sun: float = drive_torque
-	var torque_carrier: float = 0.0
-	var torque_ring: float = -brake_torque_ring * sign(omega_ring)
+	# ── External torques ──
+	var torques: PackedFloat64Array = PackedFloat64Array()
+	torques.resize(STATE_SIZE)
+	for i in range(STATE_SIZE):
+		torques[i] = 0.0
 
-	# ── 2. Bearing friction ──
-	torque_sun -= bearing_friction_sun * omega_sun
-	torque_carrier -= bearing_friction_carrier * omega_carrier
-	torque_ring -= bearing_friction_ring * omega_ring
+	# Drive on sun
+	torques[SUN] += drive_torque
 
-	# ── 3. Contact forces at each planet ──
-	for p in range(num_planets):
-		# Planet spin relative to carrier frame
-		var omega_planet_abs: float = omega_planets[p]
+	# Ring brake
+	if abs(omega[RING]) > 1e-8:
+		torques[RING] -= brake_ring * sign(omega[RING])
 
-		# Sun-planet contact (external mesh)
-		# In carrier frame: omega_sun_rel = omega_sun - omega_carrier
-		# Planet spins opposite: omega_planet_rel should satisfy ratio
-		var result_sp: PackedFloat64Array = contact.solve_external_mesh(
-			geo_sun, geo_planet,
-			theta_sun, omega_sun - omega_carrier, inertia_sun,
-			theta_planets[p], omega_planet_abs, inertia_planet,
-			tooth_stiffness, tooth_damping, dt
-		)
-		contact_forces_sp[p] = contact.last_normal_force
+	# Balance hairspring: τ = -k·θ - c·ω
+	torques[BALANCE] += -balance_stiffness * theta[BALANCE] - balance_damping * omega[BALANCE]
 
-		# Planet-ring contact (internal mesh)
-		var result_pr: PackedFloat64Array = contact.solve_internal_mesh(
-			geo_planet, geo_ring,
-			theta_planets[p], omega_planet_abs, inertia_planet,
-			theta_ring, omega_ring - omega_carrier, inertia_ring,
-			tooth_stiffness, tooth_damping, dt
-		)
-		contact_forces_pr[p] = contact.last_normal_force
+	# Escapement impulse: gate energy from escape wheel to balance
+	var gate: float = clampf(1.0 - abs(theta[BALANCE]) / escape_engage_angle, 0.0, 1.0)
+	gate = gate * gate
+	if gate > 0.01:
+		var tick_dir: float = -sign(theta[BALANCE]) if abs(theta[BALANCE]) > 1e-6 else -sign(omega[ESCAPE])
+		var tick: float = 0.3 * gate * tick_dir
+		torques[BALANCE] += tick / I_balance * I_escape
+		torques[ESCAPE] -= tick * 0.5
+		escape_impulse = tick
+	else:
+		escape_impulse = 0.0
 
-		# Apply velocity changes from contact
-		omega_sun += result_sp[0]
-		omega_planets[p] += result_sp[1] + result_pr[0]
-		omega_ring += result_pr[1]
+	# ── Bearing friction ──
+	for i in range(STATE_SIZE):
+		torques[i] -= frictions[i] * omega[i]
 
-		# Carrier receives reaction: sum of contact torques
-		var carrier_reaction: float = -(result_sp[0] * inertia_sun + result_pr[1] * inertia_ring) / inertia_carrier
-		torque_carrier += carrier_reaction * inertia_carrier / dt
+	# ── Apply torques (half-step, symplectic) ──
+	for i in range(STATE_SIZE):
+		omega[i] += torques[i] * dt / inertias[i]
 
-	# ── 4. Integrate ──
-	omega_sun += torque_sun * dt / inertia_sun
-	omega_carrier += torque_carrier * dt / inertia_carrier
-	omega_ring += torque_ring * dt / inertia_ring
+	# ── Contact constraints (iterated) ──
+	for _iter in range(solver_iterations):
+		# Sun-planet meshes (external) — in carrier frame
+		for p in range(num_planets):
+			var pi: int = PLANET0 + p
+			var omega_sun_rel: float = omega[SUN] - omega[CARRIER]
+			var omega_planet_rel: float = omega[pi]
+			var result: PackedFloat64Array = contact.solve_external(
+				geo_sun.pitch_radius, omega_sun_rel, I_sun,
+				geo_planet.pitch_radius, omega_planet_rel, I_planet,
+				contact_stiffness, contact_damping, dt)
+			omega[SUN] += result[0]
+			omega[pi] += result[1]
 
-	theta_sun += omega_sun * dt
-	theta_carrier += omega_carrier * dt
-	theta_ring += omega_ring * dt
+		# Planet-ring meshes (internal) — in carrier frame
+		for p in range(num_planets):
+			var pi: int = PLANET0 + p
+			var omega_planet_rel: float = omega[pi]
+			var omega_ring_rel: float = omega[RING] - omega[CARRIER]
+			var result: PackedFloat64Array = contact.solve_internal(
+				geo_planet.pitch_radius, omega_planet_rel, I_planet,
+				geo_ring.pitch_radius, omega_ring_rel, I_ring,
+				contact_stiffness, contact_damping, dt)
+			omega[pi] += result[0]
+			omega[RING] += result[1]
 
-	for p in range(num_planets):
-		# Planet spin derived from kinematic constraint:
-		# omega_planet = -(omega_sun - omega_carrier) * r_sun / r_planet
-		var ideal_omega_p: float = -(omega_sun - omega_carrier) * geo_sun.pitch_radius / geo_planet.pitch_radius
-		# Blend toward ideal (contact forces should enforce this, but help stability)
-		omega_planets[p] = lerpf(omega_planets[p], ideal_omega_p, 0.1)
-		theta_planets[p] += omega_planets[p] * dt
+		# Carrier reacts to planet forces (Newton's third law)
+		var carrier_torque_sum: float = 0.0
+		for p in range(num_planets):
+			carrier_torque_sum += omega[PLANET0 + p] * I_planet
+		omega[CARRIER] += carrier_torque_sum * 0.01 / I_carrier
 
-	# ── 5. Sanitize ──
-	var max_omega: float = 100.0
-	omega_sun = clampf(omega_sun, -max_omega, max_omega)
-	omega_carrier = clampf(omega_carrier, -max_omega, max_omega)
-	omega_ring = clampf(omega_ring, -max_omega, max_omega)
-	for p in range(num_planets):
-		omega_planets[p] = clampf(omega_planets[p], -max_omega * 3.0, max_omega * 3.0)
+		# Output gear pair: ring shaft → dial (external mesh)
+		var result_out: PackedFloat64Array = contact.solve_external(
+			geo_out_a.pitch_radius, omega[OUT_A] - omega[RING], I_out_a,
+			geo_out_b.pitch_radius, omega[OUT_B], I_out_b,
+			contact_stiffness, contact_damping, dt)
+		omega[OUT_A] += result_out[0]
+		omega[OUT_B] += result_out[1]
+		# Output A is fixed to ring shaft
+		omega[OUT_A] = lerpf(omega[OUT_A], omega[RING], 0.5)
 
-	# ── 6. Diagnostics ──
+		# Escapement wheel coupled to sun shaft
+		omega[ESCAPE] = lerpf(omega[ESCAPE], omega[SUN] * float(teeth_sun) / float(teeth_escape), 0.3)
+
+	# ── Integrate positions ──
+	for i in range(STATE_SIZE):
+		theta[i] += omega[i] * dt
+
+	# ── Clamp ──
+	var max_omega: float = 80.0
+	for i in range(STATE_SIZE):
+		omega[i] = clampf(omega[i], -max_omega, max_omega)
+		if is_nan(omega[i]) or is_inf(omega[i]):
+			omega[i] = 0.0
+		if is_nan(theta[i]) or is_inf(theta[i]):
+			theta[i] = 0.0
+
+	# ── Diagnostics ──
 	willis_error = ContactSolverClass.willis_error(
-		omega_sun, omega_ring, omega_carrier, teeth_sun, teeth_ring)
-	total_energy = (0.5 * inertia_sun * omega_sun * omega_sun
-		+ 0.5 * inertia_carrier * omega_carrier * omega_carrier
-		+ 0.5 * inertia_ring * omega_ring * omega_ring)
-	for p in range(num_planets):
-		total_energy += 0.5 * inertia_planet * omega_planets[p] * omega_planets[p]
-	power_in = drive_torque * omega_sun
-	power_dissipated = (bearing_friction_sun * omega_sun * omega_sun
-		+ bearing_friction_carrier * omega_carrier * omega_carrier
-		+ bearing_friction_ring * omega_ring * omega_ring)
+		omega[SUN], omega[RING], omega[CARRIER], teeth_sun, teeth_ring)
+	total_energy = 0.0
+	for i in range(STATE_SIZE):
+		total_energy += 0.5 * inertias[i] * omega[i] * omega[i]
+	power_in = drive_torque * omega[SUN]
+	if abs(omega[SUN]) > 1e-6:
+		carrier_to_sun_ratio = omega[CARRIER] / omega[SUN]
+	output_ratio = GearGeometryClass.ratio(teeth_output_a, teeth_output_b)
 
 func get_snapshot() -> Dictionary:
+	var planet_thetas: Array = []
+	var planet_omegas: Array = []
+	for p in range(num_planets):
+		planet_thetas.append(theta[PLANET0 + p])
+		planet_omegas.append(omega[PLANET0 + p])
 	return {
-		"theta_sun": theta_sun, "omega_sun": omega_sun,
-		"theta_carrier": theta_carrier, "omega_carrier": omega_carrier,
-		"theta_ring": theta_ring, "omega_ring": omega_ring,
-		"theta_planets": theta_planets.duplicate(),
-		"omega_planets": omega_planets.duplicate(),
+		"sun": {"theta": theta[SUN], "omega": omega[SUN]},
+		"carrier": {"theta": theta[CARRIER], "omega": omega[CARRIER]},
+		"ring": {"theta": theta[RING], "omega": omega[RING]},
+		"planets": {"theta": planet_thetas, "omega": planet_omegas},
+		"output_a": {"theta": theta[OUT_A], "omega": omega[OUT_A]},
+		"output_b": {"theta": theta[OUT_B], "omega": omega[OUT_B]},
+		"escapement": {"theta": theta[ESCAPE], "omega": omega[ESCAPE]},
+		"balance": {"theta": theta[BALANCE], "omega": omega[BALANCE]},
 		"willis_error": willis_error,
 		"total_energy": total_energy,
 		"power_in": power_in,
-		"power_dissipated": power_dissipated,
-		"contact_ratio_sp": contact_ratio_sp,
-		"contact_ratio_pr": contact_ratio_pr,
+		"carrier_sun_ratio": carrier_to_sun_ratio,
+		"output_ratio": output_ratio,
+		"escape_impulse": escape_impulse,
 		"sim_time": sim_time,
-		"teeth_sun": teeth_sun,
-		"teeth_planet": teeth_planet,
-		"teeth_ring": teeth_ring,
 		"carrier_radius": carrier_radius,
-		"geo_sun_pitch_r": geo_sun.pitch_radius,
-		"geo_planet_pitch_r": geo_planet.pitch_radius,
-		"geo_ring_pitch_r": geo_ring.pitch_radius,
 	}
 
-func get_geometry_report() -> String:
+func get_report() -> String:
 	var lines: PackedStringArray = PackedStringArray()
-	lines.append("═══ Exact Epicyclic Gear Train ═══")
-	lines.append("Module: %.4f m" % module)
-	lines.append("Sun:    %d teeth  r=%.4f m  I=%.6f kg·m²" % [teeth_sun, geo_sun.pitch_radius, inertia_sun])
-	lines.append("Planet: %d teeth  r=%.4f m  I=%.6f kg·m²  ×%d" % [teeth_planet, geo_planet.pitch_radius, inertia_planet, num_planets])
-	lines.append("Ring:   %d teeth  r=%.4f m  I=%.6f kg·m²" % [teeth_ring, geo_ring.pitch_radius, inertia_ring])
-	lines.append("Carrier: r=%.4f m  I=%.6f kg·m²" % [carrier_radius, inertia_carrier])
-	lines.append("Willis ratio: %.4f (expected: %.4f)" % [willis_ratio, -float(teeth_ring) / float(teeth_sun)])
-	lines.append("Contact ratio S-P: %.3f  P-R: %.3f" % [contact_ratio_sp, contact_ratio_pr])
-	lines.append("Tooth constraint: %d = %d + 2×%d → %s" % [
+	lines.append("Exact Epicyclic Mechanism")
+	lines.append("  Sun     %2dT  r=%.3f  I=%.5f" % [teeth_sun, geo_sun.pitch_radius, I_sun])
+	lines.append("  Planet  %2dT  r=%.3f  I=%.5f  x%d" % [teeth_planet, geo_planet.pitch_radius, I_planet, num_planets])
+	lines.append("  Ring    %2dT  r=%.3f  I=%.5f" % [teeth_ring, geo_ring.pitch_radius, I_ring])
+	lines.append("  Carrier      r=%.3f  I=%.5f" % [carrier_radius, I_carrier])
+	lines.append("  Output  %dT:%dT ratio=%.1f:1" % [teeth_output_a, teeth_output_b, output_ratio])
+	lines.append("  Escape  %2dT  Balance I=%.5f" % [teeth_escape, I_balance])
+	lines.append("  Willis: (ws-wc)/(wr-wc) = -%.1f" % abs(ContactSolverClass.willis_ratio(teeth_sun, teeth_ring)))
+	lines.append("  Contact CR s-p=%.2f  p-r=%.2f" % [
+		geo_sun.contact_ratio_with(geo_planet),
+		geo_planet.contact_ratio_with(geo_ring)])
+	lines.append("  %dT = %dT + 2x%dT  %s" % [
 		teeth_ring, teeth_sun, teeth_planet,
-		"OK" if teeth_ring == teeth_sun + 2 * teeth_planet else "VIOLATED"
-	])
+		"OK" if teeth_ring == teeth_sun + 2 * teeth_planet else "FAIL"])
 	return "\n".join(lines)
