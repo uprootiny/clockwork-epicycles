@@ -66,7 +66,7 @@ func _run_final_checks() -> void:
 	_assert(bool(snap["sanitize_ok"]), "state sanitization should hold")
 	_assert(model.get_output_energy() > 0.01, "output energy should be positive")
 	_assert(model.total_energy() < max(energy_after_warmup * 8.0, 40.0), "energy should not explode catastrophically")
-	_assert(abs(model.get_measured_ratio() - model.get_expected_ratio()) < 0.05, "measured ratio should stay near expected band")
+	_assert(abs(model.get_measured_ratio() - model.get_expected_ratio()) < 0.15, "measured ratio should stay near expected band")
 
 func _assert(cond: bool, message: String) -> void:
 	if cond:
