@@ -1,59 +1,44 @@
-# Clockwork Epicycles, Rube-Goldberg Edition
+# Clockwork Epicycles
 
-A Godot 4 project that renders a physically motivated clockwork core and fans that motion out into several additional modalities of mechanical interaction.
+A Godot 4.2 mechanical simulation with two rendering modes: a 2D clockwork visualization and a 3D armillary orrery.
 
-## Architecture
+## What this is
 
-The mechanism is split into explicit layers:
+A constraint-based mechanism simulator where gear motion emerges from contact forces and velocity constraints, not animation. Two simulation cores:
 
-| Layer | Path | Purpose |
-|-------|------|---------|
-| State | `scripts/model/rotor.gd` | Canonical rotor: theta, omega, inertia, torque |
-| Constraints | `scripts/constraints/*.gd` | Gear mesh, belt, escapement velocity constraints |
-| Solver | `scripts/solver/mechanism_solver.gd` | Iterative constraint solver with convergence check |
-| Composition | `scripts/mechanism_model.gd` | Wires everything together + auxiliary subsystems |
-| Visualization | `scripts/clockwork_world.gd` | 2D rendering, debug overlay, input |
+- **mechanism_model.gd** — 7 interacting subsystems (epicyclic gears, escapement, belt, cam/follower, hammer/bell, ratchet, Geneva) using iterative velocity projection
+- **mechanism/exact/** — tooth-count-derived epicyclic train with bevel gear chain, where all geometry follows from module and tooth counts
 
-## Mechanical modalities
+Both enforce physically motivated constraints. The exact model validates the Willis equation to 3 decimal places through contact dynamics.
 
-1. **Epicyclic gear train** — sun, 2 planets, carrier, ring → dial
-2. **Escapement & balance** — periodic impulse regulation
-3. **Compliant belt drive** — dial → flywheel with slip model
-4. **Cam + follower** — flywheel rotation → linear lift
-5. **Hammer & bell** — follower drives hammer into bell oscillator
-6. **One-way ratchet** — 12-tooth clickwheel, engages on downstroke
-7. **Geneva output** — stepwise 90° increments from ratchet
+## Running
+
+```bash
+# Godot editor
+godot --path .
+
+# Headless tests
+godot --headless --path . --script res://scripts/tests/test_suite.gd
+godot --headless --path . --script res://scripts/tests/test_exact_epicyclic.gd
+godot --headless --path . --script res://scripts/tests/test_orrery_mechanism.gd
+```
 
 ## Controls
 
 | Key | Action |
 |-----|--------|
-| `Space` | Pause / resume |
-| `Up` / `Down` | Increase / decrease drive torque (4–80 N·m) |
-| `Left` / `Right` | Add / release ring brake (0–0.9) |
-| `D` | Toggle debug overlay |
-| `R` | Reset simulation |
+| Space | Pause / resume |
+| Up / Down | Adjust drive torque |
+| R | Reset |
+| O | Toggle camera orbit (3D) |
 
-## Running tests
+## Live
 
-```bash
-# Project loads
-godot --headless --quit --path .
+https://uprootiny.github.io/clockwork-epicycles/
 
-# Scene-level physics test (7 seconds)
-godot --headless --path . --script res://scripts/physics_test_runner.gd
+## Known limitations
 
-# Invariant test suite (6 seconds)
-godot --headless --path . --script res://scripts/tests/test_suite.gd
-
-# Docker
-docker build -t clockwork-test . && docker run --rm clockwork-test
-```
-
-## CI/CD
-
-GitHub Actions workflow (`.github/workflows/build.yml`) runs Linux tests, then builds and exports a macOS universal app as an artifact.
-
-## Caveat
-
-This is a physically motivated toy mechanism, not literal tooth-contact rigid-body simulation. The engineering focus is on coherence, modularity, and testability rather than full contact-geometry realism.
+- Two simulation cores share no code (mechanism_model.gd and orrery_mechanism.gd duplicate concepts independently)
+- Web export requires service worker for SharedArrayBuffer; first visit may require reload
+- The 2D model's tuning parameters are empirical, not derived from geometry
+- The 3D armillary's visual gear meshes are decorative cylinders, not involute profiles

@@ -1,49 +1,46 @@
 # Clockwork Epicycles
 
-## Quick start
-- Engine: Godot 4.2.2
-- Main scene: `main.tscn` → 2D clockwork visualization
-- Armillary: `armillary.tscn` → 3D orrery with exact gear ratios
-- Run tests: `godot --headless --path . --script res://scripts/tests/test_suite.gd`
+## State of the project
 
-## Architecture
+Two simulation cores that don't share code. This is the main architectural debt.
+
+### Core 1: mechanism_model.gd (2D, main.tscn)
+- Iterative velocity projection with compliance fudge factors
+- 7 subsystems: epicyclic, escapement, belt, cam, hammer/bell, ratchet, Geneva
+- Parameters are empirical (magic numbers, not derived from geometry)
+- All variables explicitly typed for WASM compatibility
+- Tested by: physics_test_runner.gd + tests/test_suite.gd
+
+### Core 2: mechanism/exact/ (3D, armillary.tscn)
+- Everything derived from tooth counts + module
+- GearGeometry: pitch radius, contact ratio, inertia from mass
+- ContactSolver: velocity-level Baumgarte stabilization
+- BevelGeometry: cone angle law for right-angle transfer
+- OrreryMechanism: 12 bodies, Willis equation enforced
+- Tested by: tests/test_exact_epicyclic.gd + tests/test_orrery_mechanism.gd
+
+### What's missing
+- No shared code between the two cores
+- OrreryMechanism duplicates ExactEpicyclic's epicyclic solver
+- 3D gear meshes are visual cylinders, not involute profiles
+- No coherent design principle connecting the 2D and 3D presentations
+
+## Quick reference
+
+```bash
+# All tests
+godot --headless --path . --script res://scripts/tests/test_suite.gd
+godot --headless --path . --script res://scripts/tests/test_exact_epicyclic.gd
+godot --headless --path . --script res://scripts/tests/test_orrery_mechanism.gd
 ```
-main.tscn → clockwork_world.gd
-  └─ mechanism_model.gd (constraint-based 2D simulation)
-      ├─ model/rotor.gd
-      ├─ solver/mechanism_solver.gd
-      └─ constraints/{mesh,belt,escapement}_constraint.gd
 
-armillary.tscn → armillary_orrery.gd
-  └─ mechanism/exact/orrery_mechanism.gd (tooth-count-derived simulation)
-      ├─ gear_geometry.gd    (pitch radius, contact ratio from module+teeth)
-      ├─ bevel_geometry.gd   (cone angles, ω·sin(δ) law)
-      └─ contact_solver.gd   (velocity-level Baumgarte, Willis equation)
-```
+## WASM rules
+- Every local variable needs explicit type (`: float =` not `:=`)
+- Use `preload()` not `class_name` for cross-file references
+- Renderer must be `gl_compatibility` for web (patched in deploy workflow)
+- `script_export_mode=2` (text, not compiled) in web export preset
 
-## Two simulation cores
-
-1. **mechanism_model.gd** — original constraint solver, 7 subsystems
-   (sun, carrier, planets, ring, dial, escapement, balance, flywheel,
-   cam/follower, hammer/bell, ratchet, Geneva). Velocity-projection
-   with 20 iterations.
-
-2. **mechanism/exact/** — tooth-count-derived model. All geometry from
-   `module=0.04` and tooth counts. Willis equation enforced by contact
-   dynamics. Bevel gear chain for armillary ring outputs.
-
-## Key invariants
-- Willis: (ω_sun - ω_carrier)/(ω_ring - ω_carrier) = -N_ring/N_sun
-- Tooth constraint: N_ring = N_sun + 2·N_planet (48 = 24 + 2×12)
-- Energy bounded, sanitized each frame
-- Delta clamped to 100ms max
-
-## Test layers
-1. `physics_test_runner.gd` — scene-level 7s motion test
-2. `tests/test_suite.gd` — invariant checks at 2s and 6s (synchronous)
-3. `tests/test_exact_epicyclic.gd` — geometry, Willis, energy validation
-
-## Web deploy
-Exported to GitHub Pages via `deploy-web.yml`. Service worker handles
-COOP/COEP for SharedArrayBuffer. Renderer patched to gl_compatibility
-for WebGL. Text-mode script export (not compiled bytecode).
+## CI
+- build.yml: linux tests → macOS export
+- deploy-web.yml: linux test → web export → GitHub Pages (armillary scene)
+- Service worker at web/coi-serviceworker.js for COOP/COEP
